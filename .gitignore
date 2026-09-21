@@ -43,3 +43,13 @@ next-env.d.ts
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+/app/generated/prisma
+
+# Prisma-generated AI assistant skills
+.agents/
+.claude/skills/
+.windsurf/skills/
+skills-lock.json
+
+# Prisma client output (auto-generated)
+/generated/
