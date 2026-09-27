@@ -1,111 +1,144 @@
 # SecondHelping
 
-A campus meal-sharing platform. Merchants post surplus meals; students claim them.
-Built as a walking skeleton: ugly on purpose, but works end to end.
+SecondHelping is a campus surplus-food marketplace. Dining hall staff post closing bags at a discount; students browse meals, filter by dining hall and allergens, reserve food, and show a pickup code to staff.
 
-## Tech Stack
+## Current features
 
-- **Next.js 15** (App Router, TypeScript, Tailwind)
-- **PostgreSQL 16** (via Docker)
-- **Prisma 7** (ORM + migrations)
+- Student sign-up and login, with hashed passwords and database-backed sessions.
+- Role-based access: students use `/student`; dining hall supervisors use `/merchant`.
+- Unauthenticated visitors to either dashboard are redirected to the login page at `/`.
+- Staff can publish a closing bag with quantity, regular price, discount, allergens, and pickup window.
+- Students can filter available meals by dining hall and allergens, then reserve a meal.
+- Each reservation has a pickup code. Staff can confirm pickup from the dashboard.
+- The food team dashboard summarizes rescued meals, orders, and student savings.
 
-## Prerequisites
+This is a prototype: it does not process payments, send notifications, or scan pickup codes. Staff currently confirm pickups in the dashboard.
 
-- Node.js 20+
-- pnpm (`npm install -g pnpm`)
-- Docker Desktop
+## Tech stack
+
+- Next.js 16 App Router, React 19, TypeScript, and Tailwind CSS 4
+- PostgreSQL 16 via Docker Compose
+- Prisma 7
+- Node.js 20 or newer and pnpm
 
 ## Setup
 
-### 1. Install dependencies
+1. Install dependencies:
 
-```bash
-pnpm install
-```
+   ```bash
+   pnpm install
+   ```
 
-### 2. Configure environment variables
+2. Create `.env` from `.env.example`, then set `DATABASE_URL` to your PostgreSQL connection string. The example values work with the included Docker Compose configuration.
 
-Copy the template and fill in your own values:
+   ```bash
+   copy .env.example .env
+   ```
 
-```bash
-cp .env.example .env
-```
+3. Start PostgreSQL:
 
-### 3. Start the database
+   ```bash
+   docker compose up -d
+   ```
 
-```bash
-docker compose up -d
-```
+4. Apply the committed database migrations and generate Prisma Client:
 
-### 4. Run migrations and generate the Prisma client
+   ```bash
+   pnpm prisma migrate deploy
+   pnpm prisma generate
+   ```
 
-```bash
-pnpm prisma migrate dev --name init
-pnpm prisma generate
-```
+5. Load demo records:
 
-### 5. Seed the database
+   ```bash
+   pnpm prisma db seed
+   ```
 
-Creates one merchant (`merchant-1`) with three listings.
+   **The seed deletes existing orders, listings, users, and dining halls before recreating demo data.** Do not run it against data you need to keep.
 
-```bash
-pnpm prisma db seed
-```
+6. Start the app:
 
-### 6. Start the dev server
+   ```bash
+   pnpm dev
+   ```
 
-```bash
-pnpm dev
-```
+   Open [http://localhost:3000](http://localhost:3000).
 
-Open http://localhost:3000
+## Sign-in and demo accounts
 
-## Usage
+New accounts created at `/signup` are student accounts. Supervisor accounts must be provisioned separately. After seeding, these local demo accounts are available:
 
-| Route | Role | What you can do |
+| Role | Email | Password |
 |---|---|---|
-| `/merchant` | Merchant | Post a meal, see remaining quantity drop |
-| `/student` | Student | Browse listings, claim a meal |
+| Student | `student@secondhelping.test` | `demo-password` |
+| Dining hall supervisor | `supervisor@secondhelping.test` | `demo-password` |
+| Seeded system administrator (supervisor role) | `admin@buaa.cn` | `adminadmin` |
 
-**Test the full flow:**
+These credentials are for local development only. Change or remove them before deploying the app. Legacy seeded passwords are upgraded to hashed passwords when the account next logs in.
 
-1. Go to `/merchant` → fill the form → click **Post**
-2. Go to `/student` → the new listing appears → click **Claim**
-3. Back to `/merchant` → refresh → remaining quantity has decreased by 1
+## Main routes
 
-## Project Structure
+| Route | Purpose |
+|---|---|
+| `/` | Log in |
+| `/signup` | Create a student account |
+| `/student` | Browse and filter closing bags, reserve meals, and view pickup codes |
+| `/merchant` | Dining hall staff dashboard: post bags and confirm pickups |
 
-```
-├── app/
-│   ├── actions.ts          # Server Actions (createListing, claimListing)
-│   ├── merchant/page.tsx   # Merchant view
-│   └── student/page.tsx    # Student view
-|   └── generated/prisma/   # Auto-generated Prisma client (gitignored)
-├── lib/
-│   └── prisma.ts           # Prisma client singleton
-├── prisma/
-│   ├── schema.prisma       # Data models (Merchant, Listing, Order)
-│   ├── seed.ts             # Seed script
-│   └── migrations/         # Migration history (committed to git)
-├── docker-compose.yml
-├── prisma.config.ts        # Prisma 7 config (datasource url, seed command)
-└── .env                    # Your secrets (gitignored)
-```
+## Inspect PostgreSQL data with Prisma Studio
 
-## Common Commands
+With PostgreSQL running and `DATABASE_URL` configured, start Prisma Studio:
 
 ```bash
-# Database
-docker compose up -d              # Start Postgres
-docker compose down               # Stop Postgres (keeps data)
-docker compose down -v            # Stop and wipe data
+pnpm prisma studio
+```
 
-# Prisma
-pnpm prisma migrate dev --name X  # Create + apply a new migration
-pnpm prisma generate              # Regenerate client (required after schema changes)
-pnpm prisma db seed               # Re-run the seed script
-pnpm prisma studio                # Open a browser GUI to inspect data
+Studio opens a browser interface for the current database. Browse models such as `DiningHall`, `Listing`, `Order`, `User`, and `AuthSession`. Session tokens are stored as hashes. Avoid editing relational records in Studio unless you understand their required relations.
 
-# Reset everything (drop DB, re-migrate, re-seed)
-pnpm prisma migrate reset
+## Common commands
+
+```bash
+# Start or stop PostgreSQL (the regular stop preserves its data)
+docker compose up -d
+docker compose down
+
+# Apply committed migrations to a database
+pnpm prisma migrate deploy
+
+# Create and apply a migration during development after editing schema.prisma
+pnpm prisma migrate dev --name describe_the_change
+
+# Regenerate Prisma Client after schema changes
+pnpm prisma generate
+
+# Recreate demo records (deletes current app records)
+pnpm prisma db seed
+
+# Open the database browser
+pnpm prisma studio
+
+# Run lint checks
+pnpm lint
+```
+
+## Project structure
+
+```text
+app/
+  actions.ts             Marketplace server actions
+  auth-actions.ts        Login, signup, and logout actions
+  merchant/page.tsx      Dining hall staff dashboard
+  signup/page.tsx        Student registration
+  student/page.tsx       Student marketplace
+  page.tsx               Login page
+  generated/prisma/      Generated Prisma Client (do not edit by hand)
+lib/
+  auth.ts                Database-backed session helpers and route guards
+  password.ts            Password hashing and verification
+  prisma.ts              Prisma client singleton
+prisma/
+  migrations/            Database migration history
+  schema.prisma          DiningHall, Listing, Order, User, and AuthSession models
+  seed.ts                Destructive local demo-data seed
+prisma7.config.ts        Prisma 7 schema, migration, seed, and datasource config
 ```

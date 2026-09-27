@@ -6,53 +6,101 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  // remove all existing data
   await prisma.order.deleteMany();
   await prisma.listing.deleteMany();
-  await prisma.merchant.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.diningHall.deleteMany();
 
-  const merchant = await prisma.merchant.create({
+  const pickupWindowStart = new Date(Date.now() + 15 * 60 * 1000);
+  const pickupWindowEnd = new Date(Date.now() + 45 * 60 * 1000);
+  const diningHall = await prisma.diningHall.create({
     data: {
-      id: "merchant-1",          // hard-coded ID
-      name: "Campus Kitchen",
+      id: "hall-main",
+      name: "Main Dining Hall",
+      address: "Main Campus",
       listings: {
         create: [
           {
             id: "listing-1",
-            title: "Chicken Rice",
-            description: "Hainanese style, comes with soup",
+            title: "Chicken Rice Closing Bag",
+            description: "Hainanese-style chicken, rice, and soup from dinner service.",
+            originalPriceCents: 1375,
             priceCents: 550,
-            quantityTotal: 10,
-            quantityRemaining: 10,
+            discountRate: 60,
+            quantityTotal: 14,
+            quantityRemaining: 14,
+            allergens: ["soy", "sesame"],
+            pickupWindowStart,
+            pickupWindowEnd,
           },
           {
             id: "listing-2",
-            title: "Beef Noodles",
-            description: "Braised beef, hand-pulled noodles",
+            title: "Beef Noodle Bowl",
+            description: "Braised beef and hand-pulled noodles.",
+            originalPriceCents: 1950,
             priceCents: 780,
+            discountRate: 60,
             quantityTotal: 5,
             quantityRemaining: 5,
+            allergens: ["wheat", "soy"],
+            pickupWindowStart,
+            pickupWindowEnd,
           },
           {
             id: "listing-3",
-            title: "Veggie Bowl",
-            description: "Seasonal greens, brown rice",
+            title: "Seasonal Vegetable Bowl",
+            description: "Seasonal greens and brown rice.",
+            originalPriceCents: 1200,
             priceCents: 480,
+            discountRate: 60,
             quantityTotal: 8,
             quantityRemaining: 8,
+            allergens: [],
+            pickupWindowStart,
+            pickupWindowEnd,
           },
         ],
       },
     },
   });
 
-  console.log("Seeded merchant:", merchant.id);
+  await prisma.user.create({
+    data: {
+      id: "supervisor-1",
+      email: "supervisor@secondhelping.test",
+      password: "demo-password",
+      name: "Dining Hall Supervisor",
+      role: "SUPERVISOR",
+      diningHallId: diningHall.id,
+    },
+  });
+  await prisma.user.create({
+    data: {
+      id: "student-1",
+      email: "student@secondhelping.test",
+      password: "demo-password",
+      name: "Alex Student",
+      followedHalls: { connect: { id: diningHall.id } },
+    },
+  });
+  await prisma.user.create({
+    data: {
+      id: "admin-0",
+      email: "admin@buaa.cn",
+      password: "adminadmin",
+      name: "System Administrator",
+      role: "SUPERVISOR",
+      diningHallId: diningHall.id,
+    },
+  });
+
+  console.log(`Seeded ${diningHall.name} with three closing bags.`);
 }
 
 main()
   .then(() => prisma.$disconnect())
-  .catch(async (e) => {
-    console.error(e);
+  .catch(async (error) => {
+    console.error(error);
     await prisma.$disconnect();
     process.exit(1);
   });
