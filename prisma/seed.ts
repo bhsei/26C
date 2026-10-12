@@ -64,6 +64,83 @@ async function main() {
     },
   });
 
+  const diningHall_2 = await prisma.diningHall.create({
+  data: {
+    id: "hall-2",
+    name: "2nd Dining Hall",
+    address: "Main Campus",
+    listings: {
+      create: [
+        {
+          id: "listing-4",
+          title: "Chicken Rice Closing Bag",
+          description: "Hainanese-style chicken, rice, and soup from dinner service.",
+          originalPriceCents: 1375,
+          priceCents: 550,
+          discountRate: 60,
+          quantityTotal: 14,
+          quantityRemaining: 14,
+          allergens: ["soy", "sesame"],
+          pickupWindowStart,
+          pickupWindowEnd,
+        },
+        {
+          id: "listing-5",
+          title: "Beef Noodle Bowl",
+          description: "Braised beef and hand-pulled noodles.",
+          originalPriceCents: 1950,
+          priceCents: 780,
+          discountRate: 60,
+          quantityTotal: 5,
+          quantityRemaining: 5,
+          allergens: ["wheat", "soy"],
+          pickupWindowStart,
+          pickupWindowEnd,
+        },
+        {
+          id: "listing-6",
+          title: "Seasonal Vegetable Bowl",
+          description: "Seasonal greens and brown rice.",
+          originalPriceCents: 1200,
+          priceCents: 480,
+          discountRate: 60,
+          quantityTotal: 8,
+          quantityRemaining: 8,
+          allergens: [],
+          pickupWindowStart,
+          pickupWindowEnd,
+        },
+        {
+          id: "listing-7",
+          title: "Char Siu Pork Rice",
+          description: "Cantonese roast pork with jasmine rice and greens.",
+          originalPriceCents: 1450,
+          priceCents: 580,
+          discountRate: 60,
+          quantityTotal: 10,
+          quantityRemaining: 10,
+          allergens: ["soy"],
+          pickupWindowStart,
+          pickupWindowEnd,
+        },
+        {
+          id: "listing-8",
+          title: "Vegetarian Curry Set",
+          description: "Coconut vegetable curry with roti and pickles.",
+          originalPriceCents: 1300,
+          priceCents: 520,
+          discountRate: 60,
+          quantityTotal: 6,
+          quantityRemaining: 6,
+          allergens: ["gluten"],
+          pickupWindowStart,
+          pickupWindowEnd,
+        },
+      ],
+    },
+  },
+});
+
   await prisma.user.create({
     data: {
       id: "supervisor-1",
@@ -72,6 +149,16 @@ async function main() {
       name: "Dining Hall Supervisor",
       role: "SUPERVISOR",
       diningHallId: diningHall.id,
+    },
+  });
+  await prisma.user.create({
+    data: {
+      id: "supervisor-2",
+      email: "supervisor2@secondhelping.test",
+      password: "demo-password",
+      name: "Dining Hall Supervisor",
+      role: "SUPERVISOR",
+      diningHallId: diningHall_2.id,
     },
   });
   await prisma.user.create({
