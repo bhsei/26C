@@ -3,19 +3,11 @@
 import { useEffect, useState } from "react";
 
 export default function LocalClock() {
-  const [now, setNow] = useState<Date | null>(null);
+  const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    // Set immediately on mount
-    setNow(new Date());
-
-    //const start = new Date();
-    //start.setHours(19, 0, 1, 0);
-
-    // Update every second
     const id = setInterval(() => {
       setNow(new Date());
-      //setNow(start);
     }, 1000);
 
     return () => clearInterval(id);
