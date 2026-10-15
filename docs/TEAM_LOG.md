@@ -18,4 +18,4 @@ Last updated: 2026-10-12
 ## Gabriel
 | Date | Task | Commit / PR | Hours |
 |------|------|-------------|-------|
-| 2026-10-12 | Built Entity Relationship Diagram | `e4d7087` | - |
+| from 2026-10-3 to 2026-10-12 | Built First Draft of the Entity Relationship Diagram | `e4d7087` | 6 |
