@@ -19,3 +19,4 @@ Last updated: 2026-10-12
 | Date | Task | Commit / PR | Hours |
 |------|------|-------------|-------|
 | from 2026-10-3 to 2026-10-12 | Built First Draft of the Entity Relationship Diagram | `e4d7087` | 6 |
+| 2026-10-15 | Built Second Draft of the Entity Relationship Diagram | `e4d7087` | 6 |
