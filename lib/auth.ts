@@ -8,6 +8,7 @@ const SESSION_DAYS = 7;
 const SESSION_SECONDS = SESSION_DAYS * 24 * 60 * 60;
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
+// Creates a new authentication session for the given user ID
 export async function createSession(userId: string) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_SECONDS * 1000);
@@ -22,6 +23,7 @@ export async function createSession(userId: string) {
   });
 }
 
+// Gets the current user based on their authentication session
 export async function getCurrentUser() {
   const token = (await cookies()).get(COOKIE_NAME)?.value;
   if (!token) return null;
@@ -38,6 +40,7 @@ export async function getCurrentUser() {
   return session.user;
 }
 
+// Ensures the current user has the specified role, otherwise redirects them to the appropriate page
 export async function requireRole(role: "STUDENT" | "SUPERVISOR") {
   const user = await getCurrentUser();
   if (!user) redirect("/");
@@ -45,6 +48,7 @@ export async function requireRole(role: "STUDENT" | "SUPERVISOR") {
   return user;
 }
 
+// Signs out the current user by deleting their authentication session and clearing the cookie
 export async function signOutCurrentUser() {
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;

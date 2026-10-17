@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 import { createSession, signOutCurrentUser } from "@/lib/auth";
 import { hashPassword, verifyPassword } from "@/lib/password";
 
+// Handles the login process for existing users
 export async function login(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
@@ -22,6 +23,7 @@ export async function login(formData: FormData) {
   redirect(user.role === "SUPERVISOR" ? "/merchant" : "/student");
 }
 
+// Handles the signup process for new users
 export async function signUp(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -54,6 +56,7 @@ export async function signUp(formData: FormData) {
   redirect("/student");
 }
 
+// Handles the logout process for the current user
 export async function logout() {
   await signOutCurrentUser();
   redirect("/");

@@ -2,7 +2,7 @@ import Link from "next/link";
 import prisma from "@/lib/prisma";
 import { changePage, claimListing } from "@/app/actions";
 import { logout } from "@/app/auth-actions";
-import { getCurrentUser, requireRole } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import LocalClock from "@/app/components/LocalClock";
 import ClearFiltersLink from "@/app/components/ClearFiltersLink";
 import { redirect } from "next/navigation";
@@ -63,7 +63,55 @@ export default async function StudentPage({ searchParams }: { searchParams: Sear
         {(selectedHall || avoided.length > 0) && <ClearFiltersLink />}
       </form>
       {listings.length === 0 && <p className="rounded-xl border border-blue-200 p-5 text-blue-700">No meals match those filters right now.</p>}
-      {student && student.orders.length > 0 && <section className="space-y-3"><h2 className="font-semibold text-blue-900">Your reservations and pickup codes</h2>{student.orders.map((order) => <article key={order.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 p-4"><div><h3 className="font-medium">{order.listing.title} · {order.listing.diningHall.name}</h3><p className="text-sm text-green-800">{order.status.replace("_", " ")} · Pickup {order.pickupWindowStart.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}–{order.pickupWindowEnd.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p></div><p className="font-mono text-lg font-bold tracking-widest">{order.pickupCode}</p></article>)}</section>}
+      {student && student.orders.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="font-semibold text-blue-900">
+            Your reservations and pickup codes
+          </h2>
+
+          {student.orders.map((order) => {
+            const needsPayment = order.status === "PENDING_PAYMENT";
+
+            return (
+              <article
+                key={order.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 p-4"
+              >
+                <div>
+                  <h3 className="font-medium">
+                    {order.listing.title} · {order.listing.diningHall.name}
+                  </h3>
+                  <p className="text-sm text-green-800">
+                    {order.status.replace("_", " ")} · Pickup{" "}
+                    {order.pickupWindowStart.toLocaleTimeString([], {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                    –
+                    {order.pickupWindowEnd.toLocaleTimeString([], {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                </div>
+
+                {needsPayment ? (
+                  <Link
+                    href={`/pay/${order.paymentRef}`}
+                    className="rounded-lg bg-yellow-500 px-4 py-2 font-medium text-white hover:bg-yellow-600"
+                  >
+                    Complete payment
+                  </Link>
+                ) : (
+                  <p className="font-mono text-lg font-bold tracking-widest">
+                    {order.pickupCode}
+                  </p>
+                )}
+              </article>
+            );
+          })}
+        </section>
+      )}
       <section className="space-y-3">{listings.map((listing) => <article key={listing.id} className="flex flex-col justify-between gap-4 rounded-xl border border-blue-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
         <div className="space-y-1"><h2 className="font-semibold">{listing.title}</h2>
           <p className="text-sm text-blue-700">{listing.diningHall.name} · {money(listing.priceCents)} <span className="text-blue-500 line-through">{money(listing.originalPriceCents)}</span> · {listing.discountRate}% off · {listing.quantityRemaining} left</p>

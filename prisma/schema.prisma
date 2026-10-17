@@ -10,6 +10,10 @@ datasource db {
   provider = "postgresql"
 }
 
+// ════════════════════════════════════════════════════════════════
+// DataModels 
+// ════════════════════════════════════════════════════════════════
+
 model DiningHall {
   id          String    @id @default(cuid())
   name        String    @unique
@@ -17,7 +21,6 @@ model DiningHall {
   latitude    Float?
   longitude   Float?
   supervisors User[]    @relation("Supervisors")
-  followers   User[]    @relation("FollowedDiningHalls")
   listings    Listing[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -25,29 +28,33 @@ model DiningHall {
 
 model Listing {
   id                 String        @id @default(cuid())
-  title              String
-  description        String?
+  foodId             String
+  food               Food          @relation(fields: [foodId], references: [id])
   originalPriceCents Int
   priceCents         Int
   discountRate       Int           // Percentage, from 0 to 100
   quantityTotal      Int
   quantityRemaining  Int
-  allergens          String[]      @default([])
   pickupWindowStart  DateTime
   pickupWindowEnd    DateTime
   status             ListingStatus @default(ACTIVE)
-
   diningHallId String
   diningHall   DiningHall @relation(fields: [diningHallId], references: [id])
-
   createdById String?
   createdBy   User?   @relation("CreatedBy", fields: [createdById], references: [id])
-
   orders    Order[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([diningHallId, status, pickupWindowStart])
+}
+
+model Food {
+  id                 String        @id @default(cuid())
+  name               String
+  description        String
+  allergens          Allergen[]      @default([])
+  listings           Listing[]
 }
 
 model Order {
@@ -62,8 +69,10 @@ model Order {
   finalPriceCents    Int
   platformFeeCents   Int         @default(0)
   serviceFeeCents    Int         @default(0)
-  pickupCode         String      @unique @default(cuid())
-  status             OrderStatus @default(RESERVED)
+  pickupCode         String?     @unique
+  status             OrderStatus @default(PENDING_PAYMENT)
+  paymentRef     String      @unique   // simulates WeChat's prepay_id
+  paidAt         DateTime?
   pickupWindowStart  DateTime
   pickupWindowEnd    DateTime
   pickedUpAt         DateTime?
@@ -83,12 +92,40 @@ model User {
   role            Role          @default(STUDENT)
   diningHallId    String?
   diningHall      DiningHall?   @relation("Supervisors", fields: [diningHallId], references: [id])
-  followedHalls   DiningHall[]  @relation("FollowedDiningHalls")
   createdListings Listing[]     @relation("CreatedBy")
   orders          Order[]
   sessions        AuthSession[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ════════════════════════════════════════════════════════════════
+// ENUMS 
+// ════════════════════════════════════════════════════════════════
+
+enum Allergen {
+  GLUTEN
+  MILK
+  EGGS
+  FISH
+  SHELLFISH
+  TREE_NUTS
+  PEANUTS
+  WHEAT
+  SOY
+  SESAME
 }
 
 enum Role {
@@ -104,20 +141,9 @@ enum ListingStatus {
 }
 
 enum OrderStatus {
+  PENDING_PAYMENT
   RESERVED
   PICKED_UP
   CANCELLED
   EXPIRED
-}
-
-model AuthSession {
-  id        String   @id @default(cuid())
-  tokenHash String   @unique
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  @@index([userId])
-  @@index([expiresAt])
 }

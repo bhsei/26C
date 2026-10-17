@@ -1,28 +1,26 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from 'react';
 
-export default function LocalClock() {
-  const [now, setNow] = useState(() => new Date());
+export default function LocalClock({ timeZone }: { timeZone?: string }) {
+  const [time, setTime] = useState<string | null>(null);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      setNow(new Date());
-    }, 1000);
+    // Update time immediately after component mounts
+    const updateTime = () => {
+      setTime(new Date().toLocaleTimeString());
+    };
+    updateTime();
 
-    return () => clearInterval(id);
+    // Update every second
+    const timer = setInterval(updateTime, 1000);
+    return () => clearInterval(timer);
   }, []);
-
-  // Render placeholder on server
-  if (!now) {
-    return <span className="font-mono text-blue-500">--:--:--</span>;
-  }
-
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   return (
     <div className="font-mono text-blue-700">
-      <div>{now.toLocaleTimeString()}</div>
+      {/*  render a placeholder so both outputs match and hydration stays in sync */}
+      <div>{time ?? '--:--:--'}</div>
       <div className="text-xs text-blue-500">{timeZone}</div>
     </div>
   );

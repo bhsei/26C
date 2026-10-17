@@ -2,12 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { getCurrentUser, requireRole } from "@/lib/auth";
+import { randomUUID, randomBytes } from "crypto";
 import { redirect } from "next/navigation";
 
 const PLATFORM_FEE_CENTS = 25;
 const SERVICE_FEE_CENTS = 25;
 
+// A supervisor can publish a listing for their dining hall, which students can then claim.
 export async function createListing(formData: FormData) {
   const supervisor = await requireRole("SUPERVISOR");
   if (!supervisor.diningHallId) return;
@@ -48,31 +50,47 @@ export async function createListing(formData: FormData) {
   revalidatePath("/student");
 }
 
+// A student can claim a listing, which creates an order for that student and decrements the quantity remaining of the listing.
 export async function claimListing(formData: FormData) {
-  const student = await requireRole("STUDENT");
+  // Although the naming student is used here, actually, supervisors can also claim listings
+  const user = await getCurrentUser();
+  if (!user) {
+    //throw new Error("Not authenticated");
+    redirect("/login");
+  }
   const listingId = String(formData.get("listingId") ?? "");
   if (!listingId) return;
 
-  await prisma.$transaction(async (tx) => {
+  const order = await prisma.$transaction(async (tx) => {
     const listing = await tx.listing.findFirst({
-      where: { id: listingId, status: "ACTIVE", quantityRemaining: { gt: 0 }, pickupWindowEnd: { gt: new Date() } },
+      where: {
+        id: listingId,
+        status: "ACTIVE",
+        quantityRemaining: { gt: 0 },
+        pickupWindowEnd: { gt: new Date() },
+      },
     });
-    if (!listing) return;
+    if (!listing) return null;
 
     const inventory = await tx.listing.updateMany({
       where: { id: listingId, quantityRemaining: { gte: 1 }, status: "ACTIVE" },
       data: { quantityRemaining: { decrement: 1 } },
     });
-    if (!inventory.count) return;
+    if (!inventory.count) return null;
 
     if (listing.quantityRemaining === 1) {
-      await tx.listing.update({ where: { id: listingId }, data: { status: "SOLD_OUT" } });
+      await tx.listing.update({
+        where: { id: listingId },
+        data: { status: "SOLD_OUT" },
+      });
     }
 
-    await tx.order.create({
+    const paymentRef = `wx_${randomUUID()}`;
+
+    return tx.order.create({
       data: {
         listingId,
-        studentId: student.id,
+        studentId: user.id,
         quantity: 1,
         originalPriceCents: listing.originalPriceCents,
         discountRate: listing.discountRate,
@@ -81,14 +99,18 @@ export async function claimListing(formData: FormData) {
         serviceFeeCents: SERVICE_FEE_CENTS,
         pickupWindowStart: listing.pickupWindowStart,
         pickupWindowEnd: listing.pickupWindowEnd,
+        paymentRef,
       },
     });
   });
 
   revalidatePath("/merchant");
   revalidatePath("/student");
+
+  if (order) redirect(`/pay/${order.paymentRef}`);
 }
 
+// A supervisor can confirm the pickup of an order, which updates the order status to "PICKED_UP" and records the pickup time.
 export async function confirmPickup(formData: FormData) {
   const supervisor = await requireRole("SUPERVISOR");
   if (!supervisor.diningHallId) return;
@@ -104,6 +126,7 @@ export async function confirmPickup(formData: FormData) {
   revalidatePath("/student");
 }
 
+// A supervisor can switch between the merchant and student pages.
 export async function changePage(formData: FormData) {
   await requireRole("SUPERVISOR");
 
@@ -111,3 +134,43 @@ export async function changePage(formData: FormData) {
   redirect(from === "/merchant" ? "/student" : "/merchant");
 }
 
+// A pickup code is generated for each order when the student confirms payment.
+const ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ";
+function generatePickupCode(length = 10): string {
+  const bytes = randomBytes(length);
+  let code = "";
+  for (let i = 0; i < length; i++) {
+    code += ALPHABET[bytes[i] % ALPHABET.length];
+  }
+  // Group as XXXX-XXXX-XX for readability
+  return `${code.slice(0, 4)}-${code.slice(4, 8)}-${code.slice(8)}`;
+}
+
+// A student can confirm payment for an order, which updates the order status to "RESERVED".
+export async function confirmPayment(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
+  const ref = String(formData.get("ref") ?? "");
+  if (!ref) return;
+
+  // Atomic + idempotent: only PENDING_PAYMENT → PAID, once.
+  const result = await prisma.order.updateMany({
+    where: { paymentRef: ref, status: "PENDING_PAYMENT" },
+    data: {
+      status: "RESERVED",
+      paidAt: new Date(),
+      updatedAt: new Date(),
+      pickupCode: generatePickupCode(),
+    },
+  });
+
+  if (result.count === 0) {
+    // Ref not found, or already paid — either way, nothing to do.
+    // The page re-render will show the existing state.
+  }
+
+  revalidatePath(`/pay/${ref}`);
+  revalidatePath("/student");
+  revalidatePath("/merchant");
+}
