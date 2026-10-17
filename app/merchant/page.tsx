@@ -16,7 +16,7 @@ export default async function MerchantPage() {
     include: {
       listings: {
         orderBy: { createdAt: "desc" },
-        include: { orders: true },
+        include: { orders: true, food: true },
       },
     },
   });
@@ -58,7 +58,7 @@ export default async function MerchantPage() {
       <section className="max-w-2xl space-y-3 rounded-xl border border-blue-200 bg-blue-50/50 p-5 shadow-sm">
         <div><h2 className="font-semibold text-blue-900">Post a closing bag</h2><p className="text-sm text-blue-700">Set the regular price, discount, quantity, allergens, and pickup window.</p></div>
         <form action={createListing} className="grid gap-3 sm:grid-cols-2">
-          <input name="title" placeholder="Meal or bag name" required className="rounded-lg border border-blue-200 bg-white p-2" />
+          <input name="name" placeholder="Meal or bag name" required className="rounded-lg border border-blue-200 bg-white p-2" />
           <input name="quantityTotal" type="number" min="1" placeholder="Quantity available" required className="rounded-lg border border-blue-200 bg-white p-2" />
           <input name="originalPriceCents" type="number" min="1" placeholder="Regular price (cents)" required className="rounded-lg border border-blue-200 bg-white p-2" />
           <label className="grid gap-1 text-sm text-blue-800">Discount (%)<input name="discountRate" type="number" min="0" max="100" defaultValue="60" required className="rounded-lg border border-blue-200 bg-white p-2 text-blue-950" /></label>
@@ -71,10 +71,11 @@ export default async function MerchantPage() {
       </section>
       <section className="space-y-4"><h2 className="font-semibold text-blue-900">Closing bags and orders</h2>
         {diningHall.listings.map((listing) => <article key={listing.id} className="space-y-3 rounded-xl border border-blue-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="font-medium">{listing.title}</h3>
+          <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="font-medium">{listing.food.name}</h3>
             <p className="text-sm text-blue-700">{money(listing.priceCents)} · {listing.discountRate}% off · {listing.quantityRemaining}/{listing.quantityTotal} left · {listing.orders.length} orders</p>
             <p className="text-xs text-blue-600">Pickup: {dateTime(listing.pickupWindowStart)}–{dateTime(listing.pickupWindowEnd)}</p>
-            {listing.allergens.length > 0 && <p className="text-xs text-blue-600">Contains: {listing.allergens.join(", ")}</p>}
+            {listing.food.description && <p className="text-sm text-blue-800">{listing.food.description}</p>}
+            {listing.food.allergens.length > 0 && <p className="text-xs text-blue-600">Contains: {listing.food.allergens.join(", ")}</p>}
           </div><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800">{listing.status.replace("_", " ")}</span></div>
           {listing.orders.length > 0 && <div className="border-t border-blue-100 pt-3"><h4 className="mb-2 text-sm font-semibold">Pickup codes</h4><ul className="space-y-1 text-sm">{listing.orders.map((order) => <li key={order.id} className="flex flex-wrap justify-between gap-2"><span className="font-mono">{order.pickupCode}</span><span className="flex items-center gap-2 text-blue-700">{order.status.replace("_", " ")} · {money(order.finalPriceCents * order.quantity)}{order.status === "RESERVED" && <form action={confirmPickup}><input type="hidden" name="orderId" value={order.id} /><button type="submit" className="rounded bg-green-700 px-2 py-1 text-xs font-medium text-white">Confirm pickup</button></form>}</span></li>)}</ul></div>}
         </article>)}

@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import LocalClock from "@/app/components/LocalClock";
 import ClearFiltersLink from "@/app/components/ClearFiltersLink";
 import { redirect } from "next/navigation";
+import type { Allergen } from "../generated/prisma/client";
 
 export const dynamic = "force-dynamic";
 const COMMON_ALLERGENS = ["gluten", "milk", "eggs", "fish", "shellfish", "tree nuts", "peanuts", "wheat", "soy", "sesame"];
@@ -18,7 +19,9 @@ export default async function StudentPage({ searchParams }: { searchParams: Sear
   const user = await getCurrentUser();
   if (!user) redirect("/");
   const params = await searchParams;
-  const avoided = asList(params.avoid).map((allergen) => allergen.toLowerCase());
+  const avoided = asList(params.avoid)
+    .map((allergen) => allergen.toLowerCase())
+    .filter((allergen) => COMMON_ALLERGENS.includes(allergen));
   const selectedHall = params.hall ?? "";
   const [halls, listings, student] = await Promise.all([
     prisma.diningHall.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
@@ -28,14 +31,14 @@ export default async function StudentPage({ searchParams }: { searchParams: Sear
         quantityRemaining: { gt: 0 },
         pickupWindowEnd: { gt: new Date() },
         ...(selectedHall ? { diningHallId: selectedHall } : {}),
-        ...(avoided.length ? { NOT: { allergens: { hasSome: avoided } } } : {}),
+        ...(avoided.length ? { NOT: { food: { allergens: { hasSome: avoided.map((value) => value.toUpperCase().replace(/[ -]+/g, "_") as Allergen) } } } } : {}),
       },
       orderBy: { pickupWindowStart: "asc" },
-      include: { diningHall: true },
+      include: { diningHall: true, food: true },
     }),
     prisma.user.findUnique({
       where: { id: user.id },
-      include: { orders: { orderBy: { createdAt: "desc" }, include: { listing: { include: { diningHall: true } } } } },
+      include: { orders: { orderBy: { createdAt: "desc" }, include: { listing: { include: { diningHall: true, food: true } } } } },
     }),
   ]);
 
@@ -79,7 +82,7 @@ export default async function StudentPage({ searchParams }: { searchParams: Sear
               >
                 <div>
                   <h3 className="font-medium">
-                    {order.listing.title} · {order.listing.diningHall.name}
+                    {order.listing.food.name} · {order.listing.diningHall.name}
                   </h3>
                   <p className="text-sm text-green-800">
                     {order.status.replace("_", " ")} · Pickup{" "}
@@ -113,11 +116,11 @@ export default async function StudentPage({ searchParams }: { searchParams: Sear
         </section>
       )}
       <section className="space-y-3">{listings.map((listing) => <article key={listing.id} className="flex flex-col justify-between gap-4 rounded-xl border border-blue-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
-        <div className="space-y-1"><h2 className="font-semibold">{listing.title}</h2>
+        <div className="space-y-1"><h2 className="font-semibold">{listing.food.name}</h2>
           <p className="text-sm text-blue-700">{listing.diningHall.name} · {money(listing.priceCents)} <span className="text-blue-500 line-through">{money(listing.originalPriceCents)}</span> · {listing.discountRate}% off · {listing.quantityRemaining} left</p>
           <p className="text-xs text-blue-600">Pickup {listing.pickupWindowStart.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}–{listing.pickupWindowEnd.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
-          {listing.description && <p className="text-sm text-blue-800">{listing.description}</p>}
-          <p className="text-xs text-blue-600">Allergens: {listing.allergens.length ? listing.allergens.join(", ") : "No allergens listed"}</p>
+          {listing.food.description && <p className="text-sm text-blue-800">{listing.food.description}</p>}
+          <p className="text-xs text-blue-600">Allergens: {listing.food.allergens.length ? listing.food.allergens.join(", ") : "No allergens listed"}</p>
         </div>
         <form action={claimListing}><input type="hidden" name="listingId" value={listing.id} /><button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700">Reserve meal</button></form>
       </article>)}</section>

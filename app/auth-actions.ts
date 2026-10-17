@@ -42,7 +42,7 @@ export async function signUp(formData: FormData) {
         email,
         password: await hashPassword(password),
         role: "STUDENT",
-        followedHalls: { connect: { id: "hall-main" } },
+        diningHall: { connect: { id: "hall-main" } },
       },
     });
   } catch (error) {

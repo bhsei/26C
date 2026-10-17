@@ -44,17 +44,17 @@ This is a prototype: it does not process payments, send notifications, or scan p
 4. Apply the committed database migrations and generate Prisma Client:
 
    ```bash
-   pnpm prisma migrate deploy
-   pnpm prisma generate
+   pnpm db:migrate
+   pnpm db:generate
    ```
 
 5. Load demo records:
 
    ```bash
-   pnpm prisma db seed
+   pnpm db:seed
    ```
 
-   **The seed deletes existing orders, listings, users, and dining halls before recreating demo data.** Do not run it against data you need to keep.
+   **The seed deletes existing orders, sessions, listings, foods, users, and dining halls before recreating demo data.** Do not run it against data you need to keep.
 
 6. Start the app:
 
@@ -70,9 +70,9 @@ New accounts created at `/signup` are student accounts. Supervisor accounts must
 
 | Role | Email | Password |
 |---|---|---|
-| Student | `student@secondhelping.test` | `demo-password` |
-| Dining hall supervisor | `supervisor@secondhelping.test` | `demo-password` |
-| Seeded system administrator (supervisor role) | `admin@buaa.cn` | `adminadmin` |
+| Student | `stu1@buaa.test` | `studentstudent` |
+| Main Dining Hall supervisor | `sup1@buaa.test` | `adminadmin` |
+| 2nd Dining Hall supervisor | `sup2@buaa.test` | `adminadmin` |
 
 These credentials are for local development only. Change or remove them before deploying the app. Legacy seeded passwords are upgraded to hashed passwords when the account next logs in.
 
@@ -93,7 +93,7 @@ With PostgreSQL running and `DATABASE_URL` configured, start Prisma Studio:
 pnpm prisma studio
 ```
 
-Studio opens a browser interface for the current database. Browse models such as `DiningHall`, `Listing`, `Order`, `User`, and `AuthSession`. Session tokens are stored as hashes. Avoid editing relational records in Studio unless you understand their required relations.
+Studio opens a browser interface for the current database. Browse models such as `DiningHall`, `Food`, `Listing`, `Order`, `User`, and `AuthSession`. Food names, descriptions, and allergens belong to `Food`; each listing references one food record. Session tokens are stored as hashes. Avoid editing relational records in Studio unless you understand their required relations.
 
 ## Common commands
 
@@ -103,16 +103,16 @@ docker compose up -d
 docker compose down
 
 # Apply committed migrations to a database
-pnpm prisma migrate deploy
+pnpm db:migrate
 
 # Create and apply a migration during development after editing schema.prisma
 pnpm prisma migrate dev --name describe_the_change
 
 # Regenerate Prisma Client after schema changes
-pnpm prisma generate
+pnpm db:generate
 
 # Recreate demo records (deletes current app records)
-pnpm prisma db seed
+pnpm db:seed
 
 # Open the database browser
 pnpm prisma studio
@@ -138,7 +138,7 @@ lib/
   prisma.ts              Prisma client singleton
 prisma/
   migrations/            Database migration history
-  schema.prisma          DiningHall, Listing, Order, User, and AuthSession models
+  schema.prisma          DiningHall, Food, Listing, Order, User, and AuthSession models
   seed.ts                Destructive local demo-data seed
 prisma7.config.ts        Prisma 7 schema, migration, seed, and datasource config
 ```

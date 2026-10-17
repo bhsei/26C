@@ -12,7 +12,7 @@ export default async function PayPage({
   const { ref } = await params;
   const order = await prisma.order.findUnique({
     where: { paymentRef: ref },
-    include: { listing: true },
+    include: { listing: { include: { food: true } } },
   });
   if (!order) notFound();
 
@@ -45,7 +45,7 @@ export default async function PayPage({
     <main className="min-h-screen bg-white p-8 text-blue-600">
       <div className="mx-auto max-w-md text-center">
         <h1 className="text-xl font-bold">WeChat Pay (simulation)</h1>
-        <p className="mt-1 text-sm">{order.listing.title}</p>
+        <p className="mt-1 text-sm">{order.listing.food.name}</p>
         <p className="mt-4 text-3xl font-bold">¥{total.toFixed(2)}</p>
 
         <div className="mt-6 flex justify-center">
