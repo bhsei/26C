@@ -14,46 +14,55 @@ const SERVICE_FEE_CENTS = 25;
 export async function createListing(formData: FormData) {
   const supervisor = await requireRole("SUPERVISOR");
   if (!supervisor.diningHallId) return;
-  const name = String(formData.get("name") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
+
+  const foodId = String(formData.get("foodId") ?? "").trim();
   const originalPriceCents = Number(formData.get("originalPriceCents") ?? 0);
   const discountRate = Number(formData.get("discountRate") ?? 60);
   const quantityTotal = Number(formData.get("quantityTotal") ?? 0);
   const pickupWindowStart = new Date(String(formData.get("pickupWindowStart") ?? ""));
   const pickupWindowEnd = new Date(String(formData.get("pickupWindowEnd") ?? ""));
-  const allowedAllergens = new Set<Allergen>([
-    "GLUTEN", "MILK", "EGGS", "FISH", "SHELLFISH", "TREE_NUTS",
-    "PEANUTS", "WHEAT", "SOY", "SESAME",
-  ]);
-  const allergens = String(formData.get("allergens") ?? "")
-    .split(",")
-    .map((allergen) => allergen.trim().toUpperCase().replace(/[ -]+/g, "_"))
-    .filter((allergen): allergen is Allergen => allowedAllergens.has(allergen as Allergen));
 
-  if (!name || !Number.isInteger(originalPriceCents) || originalPriceCents <= 0 ||
-      !Number.isInteger(discountRate) || discountRate < 0 || discountRate > 100 ||
-      !Number.isInteger(quantityTotal) || quantityTotal <= 0 ||
-      Number.isNaN(pickupWindowStart.getTime()) || Number.isNaN(pickupWindowEnd.getTime()) ||
-      pickupWindowStart <= new Date() || pickupWindowEnd <= pickupWindowStart) return;
+  if (
+    !foodId ||
+    !Number.isInteger(originalPriceCents) || originalPriceCents <= 0 ||
+    !Number.isInteger(discountRate) || discountRate < 0 || discountRate > 100 ||
+    !Number.isInteger(quantityTotal) || quantityTotal <= 0 ||
+    Number.isNaN(pickupWindowStart.getTime()) ||
+    Number.isNaN(pickupWindowEnd.getTime()) ||
+    pickupWindowStart <= new Date() ||
+    pickupWindowEnd <= pickupWindowStart
+  ) {
+    return;
+  }
 
-  await prisma.$transaction(async (tx) => {
-    const food = await tx.food.create({
-      data: { name, description, allergens },
-    });
-    await tx.listing.create({
-      data: {
-        diningHallId: supervisor.diningHallId!,
-        createdById: supervisor.id,
-        foodId: food.id,
-        originalPriceCents,
-        priceCents: Math.round(originalPriceCents * (100 - discountRate) / 100),
-        discountRate,
-        quantityTotal,
-        quantityRemaining: quantityTotal,
-        pickupWindowStart,
-        pickupWindowEnd,
-      },
-    });
+  // Confirm the food exists in the global catalog
+  const food = await prisma.food.findUnique({ where: { id: foodId } });
+  if (!food) return;
+
+  // Optional: prevent duplicate active listings for the same dish in this hall
+  const existing = await prisma.listing.findFirst({
+    where: {
+      diningHallId: supervisor.diningHallId,
+      foodId: food.id,
+      status: "ACTIVE",
+      pickupWindowEnd: { gt: new Date() },
+    },
+  });
+  if (existing) return;
+
+  await prisma.listing.create({
+    data: {
+      diningHallId: supervisor.diningHallId,
+      createdById: supervisor.id,
+      foodId: food.id,
+      originalPriceCents,
+      priceCents: Math.round((originalPriceCents * (100 - discountRate)) / 100),
+      discountRate,
+      quantityTotal,
+      quantityRemaining: quantityTotal,
+      pickupWindowStart,
+      pickupWindowEnd,
+    },
   });
 
   revalidatePath("/merchant");
