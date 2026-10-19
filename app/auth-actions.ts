@@ -12,7 +12,7 @@ export async function login(formData: FormData) {
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user || !(await verifyPassword(password, user.password))) {
-    redirect("/?error=invalid");
+    redirect("/login?error=invalid");
   }
 
   if (!user.password.startsWith("scrypt$")) {
@@ -20,7 +20,10 @@ export async function login(formData: FormData) {
   }
 
   await createSession(user.id);
-  redirect(user.role === "SUPERVISOR" ? "/merchant" : "/student");
+  const requested = String(formData.get("next") ?? "");
+  const allowed = requested.startsWith("/") && !requested.startsWith("//") &&
+    (user.role === "SUPERVISOR" || !["/merchant", "/impact"].includes(requested));
+  redirect(allowed ? requested : user.role === "SUPERVISOR" ? "/merchant" : "/orders");
 }
 
 // Handles the signup process for new users
@@ -53,7 +56,7 @@ export async function signUp(formData: FormData) {
   }
 
   await createSession(user.id);
-  redirect("/student");
+  redirect("/orders");
 }
 
 // Handles the logout process for the current user
@@ -61,4 +64,3 @@ export async function logout() {
   await signOutCurrentUser();
   redirect("/");
 }
-

@@ -15,6 +15,7 @@ Last updated: 2026-10-12
 | 2026-10-12 | Added Login Page | `5cafbf6` | 3 |
 | 2026-09-21 | Created Baseline Application | `b6b5a3a` | 5 |
 | 2026-10-17 | Payment Simulation when Ordering + Bug Fixing (Not Adapted to The New Data Model) | `989d135` | 6 |
+| 2026-10-19 | Overview Info Page Before Login Page | `` | 2 |
 
 ## Gabriel
 | Date | Task | Commit / PR | Hours |

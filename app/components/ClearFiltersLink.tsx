@@ -7,9 +7,9 @@ import Link from "next/link";
 export default function ClearFiltersLink() {
   return (
     <Link
-      href="/student"
+      href="/orders"
       onClick={() => {
-        window.location.href = "/student"; // force full reload
+        window.location.href = "/orders"; // force full reload
       }}
       className="self-center text-sm text-blue-700 underline"
     >

@@ -73,6 +73,8 @@ model Order {
   status             OrderStatus @default(PENDING_PAYMENT)
   paymentRef     String      @unique   // simulates WeChat's prepay_id
   paidAt         DateTime?
+  refundedAt     DateTime?
+  refundAmountCents Int?
   pickupWindowStart  DateTime
   pickupWindowEnd    DateTime
   pickedUpAt         DateTime?

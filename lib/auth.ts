@@ -43,8 +43,8 @@ export async function getCurrentUser() {
 // Ensures the current user has the specified role, otherwise redirects them to the appropriate page
 export async function requireRole(role: "STUDENT" | "SUPERVISOR") {
   const user = await getCurrentUser();
-  if (!user) redirect("/");
-  if (user.role !== role) redirect(user.role === "SUPERVISOR" ? "/merchant" : "/student");
+  if (!user) redirect("/login");
+  if (user.role !== role) redirect(user.role === "SUPERVISOR" ? "/merchant" : "/orders");
   return user;
 }
 

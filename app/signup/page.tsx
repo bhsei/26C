@@ -14,7 +14,7 @@ const errors: Record<string, string> = {
 
 export default async function SignupPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const user = await getCurrentUser();
-  if (user) redirect(user.role === "SUPERVISOR" ? "/merchant" : "/student");
+  if (user) redirect(user.role === "SUPERVISOR" ? "/merchant" : "/orders");
   const params = await searchParams;
 
   return (
@@ -29,7 +29,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
           <label className="block space-y-1 text-sm font-medium">Confirm password<input name="confirmPassword" type="password" autoComplete="new-password" minLength={8} required className="w-full rounded-lg border border-blue-200 p-3 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></label>
           <button type="submit" className="w-full rounded-lg bg-blue-700 px-4 py-3 font-semibold text-white transition hover:bg-blue-800">Create account</button>
         </form>
-        <p className="text-center text-sm text-blue-700">Already have an account? <Link href="/" className="font-semibold text-blue-800 underline">Log in</Link></p>
+        <p className="text-center text-sm text-blue-700">Already have an account? <Link href="/login" className="font-semibold text-blue-800 underline">Log in</Link></p>
       </section>
     </main>
   );

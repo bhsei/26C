@@ -217,6 +217,67 @@ async function main() {
     ],
   });
 
+  // Historical demo listings are expired so they enrich analytics without cluttering the student marketplace.
+  const historicalListings = Array.from({ length: 30 }, (_, index) => {
+    const ageDays = index;
+    const createdAt = new Date(Date.now() - (ageDays * 24 + 4) * 60 * 60 * 1000);
+    const pickupWindowStart = new Date(createdAt.getTime() - 30 * 60 * 1000);
+    const pickupWindowEnd = new Date(createdAt.getTime() + 4 * 60 * 60 * 1000);
+    const foods = [chickenRice, beefNoodle, vegBowl, charSiu, vegCurry];
+    const food = foods[index % foods.length];
+    const originalPriceCents = [1375, 1950, 1200, 1450, 1300, 1680, 2150, 980, 1750, 1425][index % 10];
+    const discountRate = [35, 40, 45, 50, 55, 60, 65, 70, 75, 80][index % 10];
+    const quantityTotal = 10 + (index * 7) % 18;
+    const sampleOrderCount = 3 + (index % 5);
+    return {
+      id: `demo-listing-${index + 1}`,
+      diningHallId: index % 2 === 0 ? diningHall.id : diningHall_2.id,
+      createdById: index % 2 === 0 ? supervisor1.id : supervisor2.id,
+      foodId: food.id,
+      originalPriceCents,
+      priceCents: Math.round(originalPriceCents * (100 - discountRate) / 100),
+      discountRate,
+      quantityTotal,
+      quantityRemaining: quantityTotal - sampleOrderCount,
+      pickupWindowStart,
+      pickupWindowEnd,
+      status: "EXPIRED" as const,
+      createdAt,
+      updatedAt: createdAt,
+    };
+  });
+  await prisma.listing.createMany({ data: historicalListings });
+
+  // Three to seven varied sample orders per listing, spread across the last month.
+  const demoOrders = historicalListings.flatMap((listing, listingIndex) =>
+    Array.from({ length: 3 + (listingIndex % 5) }, (_, orderIndex) => {
+      const createdAt = listingIndex === 0
+        ? new Date(Date.now() - (3 - orderIndex) * 10 * 60 * 1000)
+        : new Date(listing.createdAt.getTime() + orderIndex * 25 * 60 * 1000);
+      const pickedUp = (listingIndex + orderIndex) % 5 !== 0;
+      return {
+        id: `demo-order-${listingIndex + 1}-${orderIndex + 1}`,
+        listingId: listing.id,
+        studentId: "student-1",
+        quantity: 1,
+        originalPriceCents: listing.originalPriceCents,
+        discountRate: listing.discountRate,
+        finalPriceCents: listing.priceCents,
+        platformFeeCents: 25,
+        serviceFeeCents: 25,
+        pickupCode: `DEMO-${String(listingIndex + 1).padStart(2, "0")}-${String(orderIndex + 1).padStart(2, "0")}`,
+        status: pickedUp ? "PICKED_UP" as const : "RESERVED" as const,
+        paymentRef: `demo-payment-${listingIndex + 1}-${orderIndex + 1}`,
+        paidAt: createdAt,
+        pickedUpAt: pickedUp ? (listingIndex === 0 ? createdAt : new Date(createdAt.getTime() + 60 * 60 * 1000)) : null,
+        pickupWindowStart: listing.pickupWindowStart,
+        pickupWindowEnd: listing.pickupWindowEnd,
+        createdAt,
+        updatedAt: createdAt,
+      };
+    }),
+  );
+  await prisma.order.createMany({ data: demoOrders });
   console.log(
     `Sample data seeded successfully. Dining halls: ${diningHall.name}, ${diningHall_2.name}`,
   );

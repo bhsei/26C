@@ -6,6 +6,7 @@ import { getCurrentUser, requireRole } from "@/lib/auth";
 import { randomUUID, randomBytes } from "crypto";
 import { redirect } from "next/navigation";
 import type { Allergen } from "../app/generated/prisma/client";
+import { settleUnavailableOrders } from "@/lib/order-lifecycle";
 
 const PLATFORM_FEE_CENTS = 25;
 const SERVICE_FEE_CENTS = 25;
@@ -66,7 +67,8 @@ export async function createListing(formData: FormData) {
   });
 
   revalidatePath("/merchant");
-  revalidatePath("/student");
+  revalidatePath("/orders");
+  revalidatePath("/");
 }
 
 // A student can claim a listing, which creates an order for that student and decrements the quantity remaining of the listing.
@@ -124,7 +126,8 @@ export async function claimListing(formData: FormData) {
   });
 
   revalidatePath("/merchant");
-  revalidatePath("/student");
+  revalidatePath("/orders");
+  revalidatePath("/");
 
   if (order) redirect(`/pay/${order.paymentRef}`);
 }
@@ -133,16 +136,41 @@ export async function claimListing(formData: FormData) {
 export async function confirmPickup(formData: FormData) {
   const supervisor = await requireRole("SUPERVISOR");
   if (!supervisor.diningHallId) return;
+  const now = new Date();
+  await settleUnavailableOrders(now);
   const orderId = String(formData.get("orderId") ?? "");
   if (!orderId) return;
 
   await prisma.order.updateMany({
-    where: { id: orderId, status: "RESERVED", listing: { diningHallId: supervisor.diningHallId } },
-    data: { status: "PICKED_UP", pickedUpAt: new Date() },
+    where: {
+      id: orderId,
+      status: "RESERVED",
+      listing: { is: { diningHallId: supervisor.diningHallId, pickupWindowEnd: { gt: now }, status: { notIn: ["EXPIRED", "WITHDRAWN"] } } },
+    },
+    data: { status: "PICKED_UP", pickedUpAt: now },
   });
 
   revalidatePath("/merchant");
-  revalidatePath("/student");
+  revalidatePath("/orders");
+  revalidatePath("/");
+}
+
+// Supervisors can withdraw an unexpired listing; paid reservations are refunded by the settlement step.
+export async function withdrawListing(formData: FormData) {
+  const supervisor = await requireRole("SUPERVISOR");
+  if (!supervisor.diningHallId) return;
+  const listingId = String(formData.get("listingId") ?? "");
+  if (!listingId) return;
+  const now = new Date();
+  await settleUnavailableOrders(now);
+  await prisma.listing.updateMany({
+    where: { id: listingId, diningHallId: supervisor.diningHallId, status: { in: ["ACTIVE", "SOLD_OUT"] }, pickupWindowEnd: { gt: now } },
+    data: { status: "WITHDRAWN", updatedAt: now },
+  });
+  await settleUnavailableOrders(now);
+  revalidatePath("/merchant");
+  revalidatePath("/orders");
+  revalidatePath("/");
 }
 
 // A supervisor can switch between the merchant and student pages.
@@ -150,7 +178,7 @@ export async function changePage(formData: FormData) {
   await requireRole("SUPERVISOR");
 
   const from = String(formData.get("from"));
-  redirect(from === "/merchant" ? "/student" : "/merchant");
+  redirect(from === "/merchant" ? "/orders" : "/merchant");
 }
 
 // A pickup code is generated for each order when the student confirms payment.
@@ -169,17 +197,24 @@ function generatePickupCode(length = 10): string {
 export async function confirmPayment(formData: FormData) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  const now = new Date();
+  await settleUnavailableOrders(now);
 
   const ref = String(formData.get("ref") ?? "");
   if (!ref) return;
 
   // Atomic + idempotent: only PENDING_PAYMENT → PAID, once.
   const result = await prisma.order.updateMany({
-    where: { paymentRef: ref, status: "PENDING_PAYMENT" },
+    where: {
+      paymentRef: ref,
+      studentId: user.id,
+      status: "PENDING_PAYMENT",
+      listing: { is: { pickupWindowEnd: { gt: now }, status: { notIn: ["EXPIRED", "WITHDRAWN"] } } },
+    },
     data: {
       status: "RESERVED",
-      paidAt: new Date(),
-      updatedAt: new Date(),
+      paidAt: now,
+      updatedAt: now,
       pickupCode: generatePickupCode(),
     },
   });
@@ -190,6 +225,7 @@ export async function confirmPayment(formData: FormData) {
   }
 
   revalidatePath(`/pay/${ref}`);
-  revalidatePath("/student");
+  revalidatePath("/orders");
   revalidatePath("/merchant");
+  revalidatePath("/");
 }
