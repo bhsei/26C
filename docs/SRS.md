@@ -222,9 +222,13 @@ Registration is required to protect users on the system by creating a way to ide
 
 **Statement:** The system shall enforce authorization so that a user with a specific role cannot access the wrong dashboard without redirection. 
 
-**Rationale:** TBD
+**Rationale:** 
 
-**Preconditions:** TBD
+Ensure that the protective granularity is respected between the users who use the system and those who maintain it.
+
+**Preconditions:** 
+
+- The user needs to be authenticated and with a valid role on the system 
 
 **Acceptance Criteria:** 
 
@@ -247,9 +251,9 @@ Listing publication allows dining-hall supervisors to make surplus food availabl
 
 **Preconditions:**
 
-The supervisor is authenticated and authorized for the relevant dining hall.
+- The supervisor is authenticated and authorized for the relevant dining hall.
 
-The listing form is accessible.
+- The listing form is accessible.
 
 **Acceptance Criteria:**
 
@@ -261,66 +265,313 @@ The listing form is accessible.
 
 **Verification Method:** Automated tests and demonstration.
 
-- ID: REQ-FUNC-005  
-  Title: Listing filtering  
-  Statement: The system shall allow students to filter active listings by dining hall and allergen preferences.  
-  Acceptance Criteria: Listings containing excluded allergens are hidden from the results list.  
-  Verification Method: Test
+#### REQ-FUNC-005 — Listing Filtering
 
-- ID: REQ-FUNC-006  
-  Title: Reservation management  
-  Statement: The system shall create an order when a student reserves an active listing and shall decrement remaining quantity to prevent overbooking.  
-  Acceptance Criteria: A reservation succeeds only if stock remains; once inventory is exhausted, the listing is marked sold out or unavailable.  
-  Verification Method: Test
+**Status:** Implemented
+**Priority:** Must have
 
-- ID: REQ-FUNC-007  
-  Title: Pickup confirmation  
-  Statement: The system shall generate a unique pickup code for each order and shall allow supervisors to confirm pickup for the correct dining hall.  
-  Acceptance Criteria: A pickup code is visible to the student and a matching order can be changed to PICKED_UP when the code is scanned.  
-  Verification Method: Demonstration
+**Statement:**
 
-- ID: REQ-FUNC-008  
-  Title: Operational summary reporting  
-  Statement: The system shall display operational summaries for rescued meals, savings, and order totals.  
-  Acceptance Criteria: The merchant dashboard updates aggregate metrics based on valid order and listing records.  
-  Verification Method: Analysis
+The system shall allow students to filter active listings by dining hall and allergen preferences.
 
-- ID: REQ-FUNC-009  
-  Title: Predictive surplus engine  
-  Statement: The future system shall predict anticipated surplus food before it occurs using historical sales, menu data, weather, campus events, and operational context.  
-  Rationale: This shifts the product from rescue after waste to prevention before waste is created.  
-  Acceptance Criteria: The system generates expected leftover portions, probability of surplus, and a confidence estimate for each meal type or dining-hall session.  
-  Verification Method: Analysis
+**Rationale:**
 
-- ID: REQ-FUNC-010  
-  Title: Prep copilot and digital twin  
-  Statement: The future system shall allow a supervisor to simulate prep-level trade-offs and estimate the impact of reducing or moving meal preparation quantities.  
-  Acceptance Criteria: The system produces a recommended prep adjustment scenario and the projected surplus reduction for alternative operations.  
-  Verification Method: Demonstration
+Filtering helps students find relevant meal offers and make more informed choices about the available food.
 
-- ID: REQ-FUNC-011  
-  Title: Multimodal listing assistant  
-  Statement: The future system shall support image or voice input for listing creation and shall convert the input into a structured listing with suggested discount, pickup time, and item description.  
-  Acceptance Criteria: A user can upload a photo or provide spoken input, and the system proposes a valid listing draft with review before publication.  
-  Verification Method: Demonstration
+**Preconditions:**
 
-- ID: REQ-FUNC-012  
-  Title: Dynamic pricing agent  
-  Statement: The future system shall personalize discounts based on time remaining, demand, inventory, and fairness constraints rather than using a single static rate.  
-  Acceptance Criteria: The pricing engine proposes a recommended price or discount range while respecting maximum fairness caps and operational objectives.  
-  Verification Method: Analysis
+- The student is accessing the marketplace.
 
-- ID: REQ-FUNC-013  
-  Title: Rescue routing  
-  Statement: The future system shall recommend the next-best destination for unsold meals, such as a pantry, shelter, staff meal, or compost stream.  
-  Acceptance Criteria: The system assigns a recommended disposition path and associated routing details based on food condition, destination feasibility, and operational constraints.  
-  Verification Method: Demonstration
+- Active listings are available in the system.
 
-- ID: REQ-FUNC-014  
-  Title: Impact estimator  
-  Statement: The future system shall estimate meals rescued, diverted food weight, CO₂e avoided, water and land savings, and student savings for each order or operational cycle.  
-  Acceptance Criteria: The system displays a breakdown of social and environmental impact for rescued food and related transactions.  
-  Verification Method: Analysis
+**Acceptance Criteria:**
+
+1. The system displays active listings that are available for reservation.
+2. Students can filter listings by dining hall.
+3. Students can exclude listings containing allergens selected in their preferences.
+4. Listings with unknown or incomplete allergen information are not represented as confirmed safe for a student's declared allergen restrictions.
+5. The system updates the displayed results when filters are changed.
+
+**Verification Method:** Automated tests and demonstration.
+
+#### REQ-FUNC-006 — Reservation Management
+
+**Status:** Implemented
+**Priority:** Must have
+
+**Statement:**
+
+The system shall allow an authenticated student to reserve an active listing only when sufficient inventory is available. Inventory validation, order creation, and inventory decrement shall be performed atomically to prevent overbooking.
+
+**Rationale:**
+
+Reservation management allows students to claim available meals while preventing overbooking and inconsistent inventory records.
+
+**Preconditions:**
+
+- The student is authenticated and authorized.
+- The listing exists and is active.
+- The requested quantity is valid and available.
+
+**Acceptance Criteria:**
+
+1. A valid reservation creates an order and reduces available inventory by the reserved quantity.
+2. A reservation exceeding available inventory is rejected without changing inventory.
+3. Concurrent reservations shall not cause inventory to become negative or exceed available stock.
+4. If order creation fails, the inventory change shall be rolled back.
+5. A sold-out or expired listing cannot be reserved.
+6. The system displays the reservation outcome to the student.
+
+**Verification Method:** Automated unit and integration tests, including concurrent reservation tests.
+
+#### REQ-FUNC-007 — Pickup Confirmation
+
+**Status:** Implemented (planned to be a QR code pickup)
+
+**Priority:** Must have
+
+**Statement:**
+
+The system shall generate a unique pickup code for each reservation and allow an authorized supervisor to confirm pickup after validating the code and the associated order.
+
+**Rationale:**
+
+Pickup confirmation provides a reliable way to verify meal collection and distinguish completed pickups from reservations that remain uncollected.
+
+**Preconditions:**
+
+- The student has a valid reservation.
+- The order has an associated pickup code.
+- The supervisor is authenticated and authorized for the relevant dining hall.
+
+**Acceptance Criteria:**
+
+1. Each reservation receives a unique pickup code.
+2. The pickup code is available to the student who owns the reservation.
+3. A valid code associated with an eligible order allows the authorized supervisor to confirm pickup.
+4. An invalid code or an order belonging to another dining hall is rejected.
+5. A successfully confirmed order is marked as PICKED_UP.
+6. A completed pickup cannot be confirmed a second time as a new valid pickup.
+
+**Verification Method:** Automated integration tests and demonstration.
+
+#### REQ-FUNC-008 — Operational Summary Reporting
+
+**Status:** Implemented
+
+**Priority:** Should have
+
+**Statement:**
+
+The system shall display operational summaries based on recorded listings and orders, including completed pickups, student savings, and order totals.
+
+**Rationale:**
+
+Operational reporting helps supervisors monitor food recovery activities and understand the use of the marketplace.
+
+**Preconditions:**
+
+- Operational listing and order data are available.
+- The user is authorized to access the relevant dashboard.
+
+**Acceptance Criteria:**
+
+1. The dashboard displays aggregate metrics calculated from recorded system data.
+2. Completed pickups are distinguished from pending, cancelled, expired, and uncollected reservations.
+3. Student savings are calculated using a documented pricing and discount methodology.
+4. The displayed totals are consistent with the underlying records for the selected reporting period.
+5. Users cannot access reports outside their authorized scope.
+
+**Verification Method:** Automated tests and analysis against database records.
+
+#### REQ-FUNC-009 — Predictive Surplus Engine
+
+**Status:** Planned
+
+**Priority:** Should have
+
+**Statement:**
+
+The future system shall estimate surplus food quantities for each meal type and dining-hall service using historical operational data and relevant contextual information, such as menu patterns, weather, and campus events when available.
+
+**Rationale:**
+
+Predicting surplus before food is prepared can help dining halls reduce overproduction and prevent avoidable food waste.
+
+**Preconditions:**
+
+- Sufficient historical data are available.
+- The required input data have been validated.
+- A forecasting model or baseline prediction method has been configured.
+
+**Acceptance Criteria:**
+
+1. The system generates a predicted leftover quantity for the specified meal type and service.
+2. The system reports the prediction timestamp and the data used to produce the forecast.
+3. Where supported by the model, the system provides a prediction interval or uncertainty estimate.
+4. Forecast performance is evaluated on held-out data using documented metrics, including comparison with a baseline model.
+5. The evaluation report documents performance across relevant meal categories or dining halls.
+6. If prediction services or required inputs are unavailable, the existing marketplace remains operational.
+
+**Verification Method:** Offline model evaluation, comparison with baseline forecasts, and operational analysis.
+
+#### REQ-FUNC-010 — Prep Copilot and Digital Twin
+
+**Status:** Planned
+
+**Priority:** Could have
+
+**Statement:**
+
+The future system shall allow authorized supervisors to simulate alternative meal-preparation quantities and estimate their potential effects on surplus food, meal availability, and operational outcomes.
+
+**Rationale:**
+
+Simulation can help supervisors assess production adjustments before applying them in real dining-hall operations.
+
+**Preconditions:**
+
+- Relevant historical or estimated preparation and demand data are available. For our cases, proxies will be used to simulate these data.
+- The supervisor is authorized to access the planning interface.
+- A simulation or optimization model is available.
+
+**Acceptance Criteria:**
+
+1. The supervisor can specify alternative preparation quantities or other supported operational parameters.
+2. The system generates projected outcomes for each valid scenario.
+3. The system compares scenarios using documented metrics, including expected surplus and potential meal shortages.
+4. Recommendations include the assumptions and relevant uncertainty associated with the projections.
+5. Simulations do not modify actual production plans unless an authorized user explicitly approves the proposed change.
+6. If the simulation service is unavailable, normal listing and reservation functionality remains operational.
+
+**Verification Method:** Demonstration, scenario-based testing, and comparison with historical operational outcomes where available.
+
+#### REQ-FUNC-011 — Multimodal Listing Assistant
+
+**Status:** Planned
+
+**Priority:** Should have
+
+**Statement:**
+
+The future system shall support image and/or voice input to generate a structured draft of a meal listing, including a suggested item description and proposed pricing and pickup information when sufficient information is available.
+
+**Rationale:**
+
+Multimodal listing assistance can reduce the time required for supervisors to publish surplus meal offers.
+
+**Preconditions:**
+
+- An authorized supervisor is authenticated.
+- The relevant image or audio input is accessible and supported by the system.
+- The multimodal processing service is available.
+
+**Acceptance Criteria:**
+
+1. The supervisor can submit a supported image or voice input.
+2. The system generates a structured listing draft from the submitted input.
+3. Fields that cannot be determined reliably are marked as missing or requiring confirmation.
+4. Suggested prices and pickup times are identified as recommendations rather than verified facts.
+5. The supervisor can review and edit the draft before publication.
+6. No listing is published automatically without the required supervisor approval.
+7. Processing failures are communicated to the supervisor without preventing manual listing creation.
+
+**Verification Method:** Demonstration, functional tests, and parsing/evaluation of extracted fields against manually verified reference data.
+
+#### REQ-FUNC-012 — Dynamic Pricing Agent
+
+**Status:** Planned
+
+**Priority:** Could have
+
+**Statement:**
+
+The future system shall recommend listing prices or discount ranges based on defined operational factors, including remaining inventory, time until pickup-window closure, and observed demand, subject to documented pricing and fairness constraints.
+
+**Rationale:**
+
+Context-aware pricing can encourage timely food recovery while balancing affordability, waste reduction, and dining-hall operational objectives.
+
+**Preconditions:**
+
+- Valid listing, inventory, and relevant demand data are available.
+- Pricing rules and fairness constraints have been configured.
+- The pricing recommendation service is available.
+
+**Acceptance Criteria:**
+
+1. The system generates a price or discount recommendation for eligible listings.
+2. Recommendations respect configured minimum and maximum prices and discount limits.
+3. The system identifies the main operational factors that contributed to a recommendation.
+4. The system evaluates recommendations against documented affordability and fairness criteria.
+5. Recommended prices do not change published prices automatically unless an explicitly authorized pricing policy permits the change.
+6. If the recommendation service is unavailable, the system continues using the configured default pricing rules.
+
+**Verification Method:** Automated rule tests, offline pricing evaluation, fairness analysis, and operational review.
+
+#### REQ-FUNC-013 — Rescue Routing
+
+**Status:** Planned
+
+**Priority:** Should have
+
+**Statement:**
+
+The future system shall recommend an appropriate destination for eligible unsold food, considering food safety and handling requirements, destination capacity, time constraints, and operational feasibility.
+
+**Rationale:**
+
+Rescue routing can help ensure that food remaining after the student marketplace closes is directed toward an appropriate recovery or disposal pathway.
+
+**Preconditions:**
+
+- The system has information about the unsold food and its handling constraints.
+- Candidate destinations and their relevant capabilities are available.
+- The routing service is available.
+
+**Acceptance Criteria:**
+
+1. The system identifies candidate destinations that satisfy the configured eligibility and operational constraints.
+2. The system recommends a destination when at least one feasible option exists.
+3. The system explains the principal factors behind the recommendation.
+4. Food that does not satisfy the required safety or handling conditions is not recommended for human consumption or donation.
+5. If no feasible destination exists, the system reports that condition and identifies an appropriate fallback pathway when one is configured.
+6. High-impact routing decisions require review and approval by an authorized operator.
+7. The system records the recommendation and the final disposition when that information is available.
+
+**Verification Method:** Scenario-based tests, operational demonstrations, and review against food-handling and destination constraints.
+
+#### REQ-FUNC-014 — Impact Estimator
+
+**Status:** Planned
+
+**Priority:** Should have
+
+**Statement:**
+
+The future system shall estimate the social and environmental impact of food-recovery activities using recorded transaction data and documented calculation methods.
+
+**Rationale:**
+
+Impact estimates can help students and campus operators understand the potential benefits of food recovery and monitor sustainability objectives.
+
+**Preconditions:**
+
+- Relevant listing, order, pickup, and quantity data are available.
+- Calculation methods and applicable conversion factors have been documented.
+- The required reference data are available.
+
+**Acceptance Criteria:**
+
+1. The system reports completed meal pickups and other defined food-recovery metrics.
+2. Where sufficient data are available, the system estimates diverted food weight, avoided greenhouse-gas emissions expressed as CO₂e, and other configured environmental indicators.
+3. Student savings are calculated using a documented reference price and transaction methodology.
+4. Each environmental estimate uses identifiable conversion factors and documented assumptions.
+5. The system distinguishes estimated impacts from directly measured quantities.
+6. Aggregate reports use consistent calculation methods and avoid counting the same transaction more than once.
+7. If required data are missing, the system identifies the affected metric as unavailable or provides a clearly documented estimate with its assumptions.
+
+**Verification Method:** Automated calculation tests, reconciliation against transaction records, and analysis of environmental assumptions.
 
 ### 3.3 Quality of Service
 #### 3.3.1 Performance
