@@ -1,10 +1,9 @@
 ﻿# Software Requirements Specification
 ## For SecondHelping
 
-Version 0.2  
-Prepared by Geming Wu  
-Student from Beihang  
-2026/10/12
+Version 0.3
+Prepared by Bianca Zavadisk, Geming Wu, Gabriel Silva, Marwen Jadlaoui and Zamo Rzgar
+
 
 ## Table of Contents
 * [1. Introduction](#1-introduction)
@@ -164,30 +163,103 @@ The application shall integrate with the following technical interfaces:
 
 ### 3.2 Functional Requirements
 
-- ID: REQ-FUNC-001  
-  Title: User login  
-  Statement: The system shall allow a registered user to sign in with an email and password and shall route the user to the appropriate dashboard based on role.  
-  Rationale: Current product operation depends on authenticated access and role separation.  
-  Acceptance Criteria: Valid credentials redirect to the correct dashboard; invalid credentials show an error and remain on the login page.  
-  Verification Method: Demonstration
+#### REQ-FUNC-001 — User Login
 
-- ID: REQ-FUNC-002  
-  Title: Student registration  
-  Statement: The system shall allow a user to create a student account with a valid email, name, and password that meets the minimum length requirement.  
-  Acceptance Criteria: Successful signup creates a new student account and redirects to the student page; duplicate emails are rejected.  
-  Verification Method: Test
+**Status:** Implemented
+**Priority:** Must have
 
-- ID: REQ-FUNC-003  
-  Title: Role-based access control  
-  Statement: The system shall enforce authorization so that student role cannot access the wrong dashboard without redirection.  
-  Acceptance Criteria: Students cannot access the supervisor dashboard.  
-  Verification Method: Test
+**Statement:**
 
-- ID: REQ-FUNC-004  
-  Title: Listing publication  
-  Statement: The system shall allow a supervisor to publish a listing with title, quantity, price, discount, allergens, and pickup window.  
-  Acceptance Criteria: Valid data is stored and the listing becomes visible to students when active.  
-  Verification Method: Demonstration
+The system shall allow a registered user to sign in with an email and password and shall route the user to the appropriate dashboard based on role. If authentication fails, the system shall display a generic error message and shall not grant access to protected resources.
+
+**Rationale:**
+
+Authentication is required to protect user accounts and ensure that students and supervisors can access only the functionality authorized for their roles.
+
+**Preconditions:**
+- The user has an existing account.
+- The application is available.
+
+**Acceptance Criteria:**
+
+1. When a user submits valid credentials, the system authenticates the user and redirects them to the appropriate dashboard.
+2. When a user submits an incorrect email or password, the system displays an error message and does not grant access.
+3. When an unauthenticated user attempts to access a protected resource, the system redirects them to the login page or denies access.
+4. After successful authentication, the user cannot access resources restricted to another role.
+5. Passwords are never stored or transmitted in plaintext, as mentioned before.
+
+**Verification Method:** Automated tests and demonstration.
+
+#### REQ-FUNC-002 — Student registration 
+
+**Status:** Implemented
+**Priority:** Must have
+
+**Statement:**
+
+The system shall allow a user to create a student account with a valid email, name, and password that meets the minimum length requirement for a password to be accepted. If any of the information mentioned is not valid, the system shall restrict the user to create an account on the system.
+
+**Rationale:**
+
+Registration is required to protect users on the system by creating a way to identify them.
+
+**Preconditions:** 
+
+- User has a valid name and a valid email by the system standards
+
+**Acceptance Criteria:**
+
+1. Successful signup creates a new student account and redirects to the student page
+2. Duplicate emails shall be rejected by the system, with the user who tries to create a account with an already linked email being unable to. 
+3. If an user has an offensive name or a fake one, the system shall also reject it, forcing the user to select his own name to access the website.
+
+**Verification Method:** Automated tests
+
+#### REQ-FUNC-003 — Role-based access control 
+
+**Status:** Not yet implemented
+**Priority:** Must have
+
+**Statement:** The system shall enforce authorization so that a user with a specific role cannot access the wrong dashboard without redirection. 
+
+**Rationale:** TBD
+
+**Preconditions:** TBD
+
+**Acceptance Criteria:** 
+
+1. When trying to access the wrong dashboard, the system shall display a message telling the user that it cannot access due to not having the role required to do so. This applies to students not accessing the supervisor dashboard and vice-versa.
+ 
+**Verification Method:** Automated tests
+
+#### REQ-FUNC-004 — Listing Publication
+
+**Status:** Implemented 
+**Priority:** Must have
+
+**Statement:**
+
+The system shall allow an authorized supervisor to create and publish a meal listing containing a title, quantity, price, discount, allergen information, and pickup window.
+
+**Rationale:**
+
+Listing publication allows dining-hall supervisors to make surplus food available to students before it is discarded.
+
+**Preconditions:**
+
+The supervisor is authenticated and authorized for the relevant dining hall.
+
+The listing form is accessible.
+
+**Acceptance Criteria:**
+
+1. The system accepts a listing when all required fields contain valid values.
+2. The system rejects invalid quantities, prices, discounts, or pickup windows.
+3. A successfully published listing is stored in the database and becomes visible to eligible students.
+4. Only authorized supervisors can create or modify listings for their assigned dining hall.
+5. A listing that has not been published is not displayed as an active offer.
+
+**Verification Method:** Automated tests and demonstration.
 
 - ID: REQ-FUNC-005  
   Title: Listing filtering  
