@@ -5,7 +5,6 @@ import prisma from "@/lib/prisma";
 import { getCurrentUser, requireRole } from "@/lib/auth";
 import { randomUUID, randomBytes } from "crypto";
 import { redirect } from "next/navigation";
-import type { Allergen } from "../app/generated/prisma/client";
 import { settleUnavailableOrders } from "@/lib/order-lifecycle";
 import { sendOrderPlacedNotifications } from "@/lib/notifications";
 

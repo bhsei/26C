@@ -94,7 +94,7 @@ export default function Notifications() {
           <div className="max-h-[22rem] overflow-y-auto">
             {notifications.length === 0 ? (
               <div className="p-6 text-sm text-gray-400 text-center">
-                You're all caught up!
+                You&apos;re all caught up!
               </div>
             ) : (
               displayedNotifications.map((notif) => (
