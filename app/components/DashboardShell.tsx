@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { logout } from "@/app/auth-actions";
 import prisma from "@/lib/prisma";
 import type { User } from "../generated/prisma/client";
+import Notifications from "@/app/components/Notifications";
 
 type Section = "overview" | "orders" | "listings" | "impact";
 
@@ -44,7 +45,33 @@ export default async function DashboardShell({
         </div>
       </aside>
       <section className="dashboard-main">
-        <header className="topbar"><div className="breadcrumbs">Workspace <span>/</span> <b>{nav.find((item) => item.key === active)?.label}</b></div><div className="top-actions">{user ? <span className="live-pill" title={supervisor ? `Assigned dining hall: ${hallLabel}` : undefined}><i /> {supervisor ? `Supervisor · ${hallLabel}` : "Student account"}</span> : <span className="live-pill"><i /> Browse as guest</span>}{user ? <form action={logout}><button className="sign-in" type="submit">Sign out <span>↗</span></button></form> : <Link className="sign-in" href={`/login?next=${active === "orders" ? "/orders" : "/"}`}>Sign in <span>↗</span></Link>}</div></header>
+        <header className="topbar">
+          <div className="breadcrumbs">
+            Workspace <span>/</span> <b>{nav.find((item) => item.key === active)?.label}</b>
+          </div>
+          
+          <div className="top-actions">
+            {user && <Notifications />}
+            
+            {user ? (
+              <span className="live-pill" title={supervisor ? `Assigned dining hall: ${hallLabel}` : undefined}>
+                <i /> {supervisor ? `Supervisor · ${hallLabel}` : "Student account"}
+              </span>
+            ) : (
+              <span className="live-pill"><i /> Browse as guest</span>
+            )}
+            
+            {user ? (
+              <form action={logout}>
+                <button className="sign-in" type="submit">Sign out <span>↗</span></button>
+              </form>
+            ) : (
+              <Link className="sign-in" href={`/login?next=${active === "orders" ? "/orders" : "/"}`}>
+                Sign in <span>↗</span>
+              </Link>
+            )}
+          </div>
+        </header>
         <div className="page-content">{children}<footer className="footer"><span>© 2026 SecondHelping</span><span>Making good food go further <b>✳</b></span></footer></div>
       </section>
     </main>
