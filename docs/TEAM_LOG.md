@@ -24,3 +24,7 @@ Last updated: 2026-10-12
 | 2026-10-15 | Built Second Draft of the Entity Relationship Diagram | `0d5a7f8` | 4 |
 | 2026-10-19 | New information onto SRS Functional Requirements |  `155c11f/4b2992e` | 4 |
 
+## Bianca 比安卡
+| Date | Task | Commit / PR | Hours |
+|------|------|-------------|-------|
+|from 2026-10-20 to 2026-10-21| Implemented initial version of the in-app notification feature | `3f48b54/7283066/794ce0e` | 5 |
