@@ -22,3 +22,5 @@ Last updated: 2026-10-12
 |------|------|-------------|-------|
 | from 2026-10-3 to 2026-10-12 | Built First Draft of the Entity Relationship Diagram | `e4d7087` | 6 |
 | 2026-10-15 | Built Second Draft of the Entity Relationship Diagram | `0d5a7f8` | 4 |
+| 2026-10-19 | New information onto SRS Functional Requirements |  `155c11f/4b2992e` | 4 |
+
