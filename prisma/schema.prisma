@@ -71,6 +71,8 @@ model Order {
   serviceFeeCents    Int         @default(0)
   pickupCode         String?     @unique
   status             OrderStatus @default(PENDING_PAYMENT)
+  reminderOpenSent  Boolean   @default(false)
+  reminderCloseSent Boolean   @default(false)
   paymentRef     String      @unique   // simulates WeChat's prepay_id
   paidAt         DateTime?
   refundedAt     DateTime?
@@ -96,6 +98,7 @@ model User {
   diningHall      DiningHall?   @relation("Supervisors", fields: [diningHallId], references: [id])
   createdListings Listing[]     @relation("CreatedBy")
   orders          Order[]
+  notifications   Notification[]
   sessions        AuthSession[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -111,6 +114,17 @@ model AuthSession {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 // ════════════════════════════════════════════════════════════════

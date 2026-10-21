@@ -7,6 +7,7 @@ import { randomUUID, randomBytes } from "crypto";
 import { redirect } from "next/navigation";
 import type { Allergen } from "../app/generated/prisma/client";
 import { settleUnavailableOrders } from "@/lib/order-lifecycle";
+import { sendOrderPlacedNotifications } from "@/lib/notifications";
 
 const PLATFORM_FEE_CENTS = 25;
 const SERVICE_FEE_CENTS = 25;
@@ -83,12 +84,19 @@ export async function claimListing(formData: FormData) {
   if (!listingId) return;
 
   const order = await prisma.$transaction(async (tx) => {
+    // 1. UPDATED: Include food and supervisor relations so we can send the notification
     const listing = await tx.listing.findFirst({
       where: {
         id: listingId,
         status: "ACTIVE",
         quantityRemaining: { gt: 0 },
         pickupWindowEnd: { gt: new Date() },
+      },
+      include: {
+        food: true,
+        diningHall: {
+          include: { supervisors: true },
+        },
       },
     });
     if (!listing) return null;
@@ -99,11 +107,35 @@ export async function claimListing(formData: FormData) {
     });
     if (!inventory.count) return null;
 
+    // 2. UPDATED: Create notifications when the last item is claimed
     if (listing.quantityRemaining === 1) {
       await tx.listing.update({
         where: { id: listingId },
         data: { status: "SOLD_OUT" },
       });
+
+      // Notify the specific user who created the listing
+      if (listing.createdById) {
+        await tx.notification.create({
+          data: {
+            userId: listing.createdById,
+            message: `🎉 Great news! Your listing for ${listing.food.name} has completely sold out.`,
+            isRead: false,
+          },
+        });
+      } 
+      // Fallback: Notify all supervisors of that dining hall if createdById isn't set
+      else if (listing.diningHall.supervisors.length > 0) {
+        const notificationsToCreate = listing.diningHall.supervisors.map((sup) => ({
+          userId: sup.id,
+          message: `🎉 Great news! The listing for ${listing.food.name} has completely sold out.`,
+          isRead: false,
+        }));
+        
+        await tx.notification.createMany({
+          data: notificationsToCreate,
+        });
+      }
     }
 
     const paymentRef = `wx_${randomUUID()}`;
@@ -222,6 +254,18 @@ export async function confirmPayment(formData: FormData) {
   if (result.count === 0) {
     // Ref not found, or already paid — either way, nothing to do.
     // The page re-render will show the existing state.
+  }
+
+  if (result.count > 0) {
+    // Fetch the updated order so we have its ID to trigger notifications
+    const confirmedOrder = await prisma.order.findFirst({
+      where: { paymentRef: ref }
+    });
+    
+    if (confirmedOrder) {
+      // Trigger the notifications now that the order is fully paid and has a pickup code
+      await sendOrderPlacedNotifications(confirmedOrder.id);
+    }
   }
 
   revalidatePath(`/pay/${ref}`);
