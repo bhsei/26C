@@ -13,13 +13,20 @@ export async function GET() {
       reminderOpenSent: false,
       pickupWindowStart: { gt: now, lte: tenMinsFromNow },
     },
+    include: {
+      listing: {
+        include: {
+          food: true, // Includes the food details so we can get the name
+        },
+      },
+    },
   });
 
   for (const order of openingSoonOrders) {
     await prisma.notification.create({
       data: {
         userId: order.studentId,
-        message: `Reminder: Your pickup window opens in 10 minutes! Your pickup code is ${order.pickupCode}.`,
+        message: `Get ready! Your pickup window for ${order.listing.food.name} opens in 10 minutes. Your pickup code is: ${order.pickupCode}.`,
       },
     });
     // Mark as sent
@@ -37,17 +44,24 @@ export async function GET() {
       pickupWindowStart: { lte: now },
       pickupWindowEnd: { gt: now },
     },
+    include: {
+      listing: {
+        include: {
+          food: true, 
+        },
+      },
+    },
   });
 
   let alreadyOpenRemindersSent = 0;
 
   for (const order of alreadyOpenOrders) {
-    // NEW: Strictly check if the order was placed WHILE the window was open.
+    // Strictly check if the order was placed WHILE the window was open.
     if (order.createdAt >= order.pickupWindowStart) {
       await prisma.notification.create({
         data: {
           userId: order.studentId,
-          message: `Ready for pickup! Your window is open right now. Head over and show your pickup code: ${order.pickupCode}.`,
+          message: `Ready for pickup! Your window for ${order.listing.food.name} is open right now. Head over and show your pickup code: ${order.pickupCode}.`,
         },
       });
       alreadyOpenRemindersSent++;
@@ -67,13 +81,20 @@ export async function GET() {
       reminderCloseSent: false,
       pickupWindowEnd: { gt: now, lte: thirtyMinsFromNow },
     },
+    include: {
+      listing: {
+        include: {
+          food: true, 
+        },
+      },
+    },
   });
 
   for (const order of closingSoonOrders) {
     await prisma.notification.create({
       data: {
         userId: order.studentId,
-        message: `Warning: Your pickup window closes in 30 minutes! Please pick up your order. Don't forget to show your pickup code: ${order.pickupCode}.`,
+        message: `Warning: Your pickup window for ${order.listing.food.name} closes in 30 minutes! Please pick up your order. Don't forget to show your pickup code: ${order.pickupCode}.`,
       },
     });
     // Mark as sent
@@ -86,7 +107,7 @@ export async function GET() {
   return NextResponse.json({ 
     success: true, 
     openingRemindersSent: openingSoonOrders.length, 
-    alreadyOpenRemindersSent, // Returns the true count of immediate notifications
+    alreadyOpenRemindersSent, 
     closingRemindersSent: closingSoonOrders.length 
   });
 }
