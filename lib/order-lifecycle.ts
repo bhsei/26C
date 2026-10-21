@@ -15,41 +15,26 @@ export async function settleUnavailableOrders(now = new Date()) {
     data: { status: "EXPIRED", updatedAt: now },
   });
 
-  const outstanding = await prisma.order.findMany({
+  const orders = await prisma.order.findMany({
     where: {
-      status: { in: ["PENDING_PAYMENT", "RESERVED"] },
-      listing: {
-        is: {
-          OR: [
-            { status: { in: ["EXPIRED", "WITHDRAWN"] } },
-            { pickupWindowEnd: { lte: now } },
-          ],
-        },
-      },
+      status: { in: ["PENDING_PAYMENT", "CONFIRMED"] },
+      pickupWindowEnd: { lte: now },
     },
-    select: {
-      id: true,
-      status: true,
-      finalPriceCents: true,
-      quantity: true,
-      platformFeeCents: true,
-      serviceFeeCents: true,
-      listing: { select: { status: true } },
+    include: {
+      items: { include: { listing: true } },
+      payments: true,
     },
   });
 
-  for (const order of outstanding) {
-    const paid = order.status === "RESERVED";
-    const withdrawn = order.listing.status === "WITHDRAWN";
-    const refundAmountCents = paid
-      ? order.finalPriceCents * order.quantity + order.platformFeeCents + order.serviceFeeCents
-      : 0;
-    await prisma.order.updateMany({
-      where: { id: order.id, status: order.status },
+  for (const order of orders) {
+    const hasPaid = order.payments.some((payment) => payment.status === "PAID");
+    const listingStatus = order.items[0]?.listing.status;
+    const nextStatus = listingStatus === "CANCELLED" ? "CANCELLED" : "EXPIRED";
+
+    await prisma.order.update({
+      where: { id: order.id },
       data: {
-        status: withdrawn ? "CANCELLED" : "EXPIRED",
-        refundAmountCents,
-        refundedAt: paid ? now : null,
+        status: hasPaid ? "CONFIRMED" : nextStatus,
         updatedAt: now,
       },
     });

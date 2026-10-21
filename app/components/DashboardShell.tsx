@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { logout } from "@/app/auth-actions";
 import prisma from "@/lib/prisma";
+import { getUserDiningHallId, isSupervisorRole } from "@/lib/auth";
 import type { User } from "../generated/prisma/client";
 
 type Section = "overview" | "orders" | "listings" | "impact";
@@ -15,9 +16,10 @@ export default async function DashboardShell({
   active: Section;
   children: ReactNode;
 }) {
-  const supervisor = user?.role === "SUPERVISOR";
-  const assignedHall = supervisor && user.diningHallId
-    ? await prisma.diningHall.findUnique({ where: { id: user.diningHallId }, select: { name: true } })
+  const supervisor = user ? isSupervisorRole(user.role) : false;
+  const assignedHallId = user && supervisor ? await getUserDiningHallId(user.id) : null;
+  const assignedHall = assignedHallId
+    ? await prisma.diningHall.findUnique({ where: { id: assignedHallId }, select: { name: true } })
     : null;
   const hallLabel = assignedHall?.name ?? "No dining hall assigned";
   const nav = [

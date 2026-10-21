@@ -5,7 +5,6 @@ import prisma from "@/lib/prisma";
 import { getCurrentUser, requireRole } from "@/lib/auth";
 import { randomUUID, randomBytes } from "crypto";
 import { redirect } from "next/navigation";
-import type { Allergen } from "../app/generated/prisma/client";
 import { settleUnavailableOrders } from "@/lib/order-lifecycle";
 
 const PLATFORM_FEE_CENTS = 25;
@@ -14,9 +13,13 @@ const SERVICE_FEE_CENTS = 25;
 // A supervisor can publish a listing for their dining hall, which students can then claim.
 export async function createListing(formData: FormData) {
   const supervisor = await requireRole("SUPERVISOR");
-  if (!supervisor.diningHallId) return;
+  const membership = await prisma.diningHallMember.findFirst({
+    where: { userId: supervisor.id, relation: { in: ["OWNER", "SUPERVISOR"] } },
+    select: { diningHallId: true },
+  });
+  if (!membership) return;
 
-  const foodId = String(formData.get("foodId") ?? "").trim();
+  const foodItemId = String(formData.get("foodId") ?? "").trim();
   const originalPriceCents = Number(formData.get("originalPriceCents") ?? 0);
   const discountRate = Number(formData.get("discountRate") ?? 60);
   const quantityTotal = Number(formData.get("quantityTotal") ?? 0);
@@ -24,7 +27,7 @@ export async function createListing(formData: FormData) {
   const pickupWindowEnd = new Date(String(formData.get("pickupWindowEnd") ?? ""));
 
   if (
-    !foodId ||
+    !foodItemId ||
     !Number.isInteger(originalPriceCents) || originalPriceCents <= 0 ||
     !Number.isInteger(discountRate) || discountRate < 0 || discountRate > 100 ||
     !Number.isInteger(quantityTotal) || quantityTotal <= 0 ||
@@ -36,33 +39,26 @@ export async function createListing(formData: FormData) {
     return;
   }
 
-  // Confirm the food exists in the global catalog
-  const food = await prisma.food.findUnique({ where: { id: foodId } });
-  if (!food) return;
-
-  // Optional: prevent duplicate active listings for the same dish in this hall
-  const existing = await prisma.listing.findFirst({
-    where: {
-      diningHallId: supervisor.diningHallId,
-      foodId: food.id,
-      status: "ACTIVE",
-      pickupWindowEnd: { gt: new Date() },
-    },
-  });
-  if (existing) return;
+  const foodItem = await prisma.foodItem.findUnique({ where: { id: foodItemId } });
+  if (!foodItem || foodItem.diningHallId !== membership.diningHallId) return;
 
   await prisma.listing.create({
     data: {
-      diningHallId: supervisor.diningHallId,
+      diningHallId: membership.diningHallId,
       createdById: supervisor.id,
-      foodId: food.id,
+      foodItemId: foodItem.id,
+      title: foodItem.name,
+      description: `Prepared in ${foodItem.category ?? "dining hall"}`,
+      category: foodItem.category,
+      unitWeightGrams: foodItem.unitWeightGrams,
       originalPriceCents,
       priceCents: Math.round((originalPriceCents * (100 - discountRate)) / 100),
-      discountRate,
+      discountRate: discountRate / 100,
       quantityTotal,
       quantityRemaining: quantityTotal,
       pickupWindowStart,
       pickupWindowEnd,
+      status: "ACTIVE",
     },
   });
 
@@ -73,55 +69,55 @@ export async function createListing(formData: FormData) {
 
 // A student can claim a listing, which creates an order for that student and decrements the quantity remaining of the listing.
 export async function claimListing(formData: FormData) {
-  // Although the naming student is used here, actually, supervisors can also claim listings
   const user = await getCurrentUser();
-  if (!user) {
-    //throw new Error("Not authenticated");
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
   const listingId = String(formData.get("listingId") ?? "");
   if (!listingId) return;
 
+  const listing = await prisma.listing.findFirst({
+    where: { id: listingId, status: "ACTIVE", quantityRemaining: { gt: 0 }, pickupWindowEnd: { gt: new Date() } },
+  });
+  if (!listing) return;
+
+  const paymentRef = `wx_${randomUUID()}`;
+  const pickupCode = generatePickupCode();
+
   const order = await prisma.$transaction(async (tx) => {
-    const listing = await tx.listing.findFirst({
-      where: {
-        id: listingId,
-        status: "ACTIVE",
-        quantityRemaining: { gt: 0 },
-        pickupWindowEnd: { gt: new Date() },
-      },
+    const updatedListing = await tx.listing.update({
+      where: { id: listing.id },
+      data: { quantityRemaining: { decrement: 1 }, status: listing.quantityRemaining === 1 ? "SOLD_OUT" : "ACTIVE" },
     });
-    if (!listing) return null;
-
-    const inventory = await tx.listing.updateMany({
-      where: { id: listingId, quantityRemaining: { gte: 1 }, status: "ACTIVE" },
-      data: { quantityRemaining: { decrement: 1 } },
-    });
-    if (!inventory.count) return null;
-
-    if (listing.quantityRemaining === 1) {
-      await tx.listing.update({
-        where: { id: listingId },
-        data: { status: "SOLD_OUT" },
-      });
-    }
-
-    const paymentRef = `wx_${randomUUID()}`;
 
     return tx.order.create({
       data: {
-        listingId,
         studentId: user.id,
-        quantity: 1,
-        originalPriceCents: listing.originalPriceCents,
-        discountRate: listing.discountRate,
-        finalPriceCents: listing.priceCents,
+        diningHallId: updatedListing.diningHallId,
         platformFeeCents: PLATFORM_FEE_CENTS,
         serviceFeeCents: SERVICE_FEE_CENTS,
-        pickupWindowStart: listing.pickupWindowStart,
-        pickupWindowEnd: listing.pickupWindowEnd,
-        paymentRef,
+        totalCents: updatedListing.priceCents + PLATFORM_FEE_CENTS + SERVICE_FEE_CENTS,
+        pickupCode,
+        status: "PENDING_PAYMENT",
+        pickupWindowStart: updatedListing.pickupWindowStart,
+        pickupWindowEnd: updatedListing.pickupWindowEnd,
+        items: {
+          create: {
+            listingId: updatedListing.id,
+            quantity: 1,
+            originalPriceCents: updatedListing.originalPriceCents,
+            discountRate: updatedListing.discountRate,
+            finalPriceCents: updatedListing.priceCents,
+          },
+        },
+        payments: {
+          create: {
+            method: "WALLET",
+            amountCents: updatedListing.priceCents + PLATFORM_FEE_CENTS + SERVICE_FEE_CENTS,
+            status: "PENDING",
+            externalGatewayId: paymentRef,
+          },
+        },
       },
+      include: { payments: true },
     });
   });
 
@@ -129,24 +125,25 @@ export async function claimListing(formData: FormData) {
   revalidatePath("/orders");
   revalidatePath("/");
 
-  if (order) redirect(`/pay/${order.paymentRef}`);
+  redirect(`/pay/${order.id}`);
 }
 
 // A supervisor can confirm the pickup of an order, which updates the order status to "PICKED_UP" and records the pickup time.
 export async function confirmPickup(formData: FormData) {
   const supervisor = await requireRole("SUPERVISOR");
-  if (!supervisor.diningHallId) return;
   const now = new Date();
   await settleUnavailableOrders(now);
   const orderId = String(formData.get("orderId") ?? "");
   if (!orderId) return;
 
+  const membership = await prisma.diningHallMember.findFirst({
+    where: { userId: supervisor.id, relation: { in: ["OWNER", "SUPERVISOR"] } },
+    select: { diningHallId: true },
+  });
+  if (!membership) return;
+
   await prisma.order.updateMany({
-    where: {
-      id: orderId,
-      status: "RESERVED",
-      listing: { is: { diningHallId: supervisor.diningHallId, pickupWindowEnd: { gt: now }, status: { notIn: ["EXPIRED", "WITHDRAWN"] } } },
-    },
+    where: { id: orderId, status: "PENDING_PAYMENT", diningHallId: membership.diningHallId },
     data: { status: "PICKED_UP", pickedUpAt: now },
   });
 
@@ -158,16 +155,19 @@ export async function confirmPickup(formData: FormData) {
 // Supervisors can withdraw an unexpired listing; paid reservations are refunded by the settlement step.
 export async function withdrawListing(formData: FormData) {
   const supervisor = await requireRole("SUPERVISOR");
-  if (!supervisor.diningHallId) return;
   const listingId = String(formData.get("listingId") ?? "");
   if (!listingId) return;
+  const membership = await prisma.diningHallMember.findFirst({
+    where: { userId: supervisor.id, relation: { in: ["OWNER", "SUPERVISOR"] } },
+    select: { diningHallId: true },
+  });
+  if (!membership) return;
   const now = new Date();
   await settleUnavailableOrders(now);
   await prisma.listing.updateMany({
-    where: { id: listingId, diningHallId: supervisor.diningHallId, status: { in: ["ACTIVE", "SOLD_OUT"] }, pickupWindowEnd: { gt: now } },
-    data: { status: "WITHDRAWN", updatedAt: now },
+    where: { id: listingId, diningHallId: membership.diningHallId, status: { in: ["ACTIVE", "SOLD_OUT"] }, pickupWindowEnd: { gt: now } },
+    data: { status: "CANCELLED", updatedAt: now },
   });
-  await settleUnavailableOrders(now);
   revalidatePath("/merchant");
   revalidatePath("/orders");
   revalidatePath("/");
@@ -176,12 +176,10 @@ export async function withdrawListing(formData: FormData) {
 // A supervisor can switch between the merchant and student pages.
 export async function changePage(formData: FormData) {
   await requireRole("SUPERVISOR");
-
-  const from = String(formData.get("from"));
+  const from = String(formData.get("from") ?? "/merchant");
   redirect(from === "/merchant" ? "/orders" : "/merchant");
 }
 
-// A pickup code is generated for each order when the student confirms payment.
 const ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ";
 function generatePickupCode(length = 10): string {
   const bytes = randomBytes(length);
@@ -189,7 +187,6 @@ function generatePickupCode(length = 10): string {
   for (let i = 0; i < length; i++) {
     code += ALPHABET[bytes[i] % ALPHABET.length];
   }
-  // Group as XXXX-XXXX-XX for readability
   return `${code.slice(0, 4)}-${code.slice(4, 8)}-${code.slice(8)}`;
 }
 
@@ -203,26 +200,15 @@ export async function confirmPayment(formData: FormData) {
   const ref = String(formData.get("ref") ?? "");
   if (!ref) return;
 
-  // Atomic + idempotent: only PENDING_PAYMENT → PAID, once.
-  const result = await prisma.order.updateMany({
+  await prisma.order.updateMany({
     where: {
-      paymentRef: ref,
+      id: ref,
       studentId: user.id,
       status: "PENDING_PAYMENT",
-      listing: { is: { pickupWindowEnd: { gt: now }, status: { notIn: ["EXPIRED", "WITHDRAWN"] } } },
+      pickupWindowEnd: { gt: now },
     },
-    data: {
-      status: "RESERVED",
-      paidAt: now,
-      updatedAt: now,
-      pickupCode: generatePickupCode(),
-    },
+    data: { status: "CONFIRMED", updatedAt: now },
   });
-
-  if (result.count === 0) {
-    // Ref not found, or already paid — either way, nothing to do.
-    // The page re-render will show the existing state.
-  }
 
   revalidatePath(`/pay/${ref}`);
   revalidatePath("/orders");

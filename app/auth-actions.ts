@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
-import { createSession, signOutCurrentUser } from "@/lib/auth";
+import { createSession, signOutCurrentUser, isSupervisorRole } from "@/lib/auth";
 import { hashPassword, verifyPassword } from "@/lib/password";
 
 // Handles the login process for existing users
@@ -11,19 +11,22 @@ export async function login(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const user = await prisma.user.findUnique({ where: { email } });
 
-  if (!user || !(await verifyPassword(password, user.password))) {
+  if (!user || !(await verifyPassword(password, user.passwordHash))) {
     redirect("/login?error=invalid");
   }
 
-  if (!user.password.startsWith("scrypt$")) {
-    await prisma.user.update({ where: { id: user.id }, data: { password: await hashPassword(password) } });
+  if (!user.passwordHash.startsWith("scrypt$")) {
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(password) } });
   }
 
   await createSession(user.id);
   const requested = String(formData.get("next") ?? "");
   const allowed = requested.startsWith("/") && !requested.startsWith("//") &&
-    (user.role === "SUPERVISOR" || !["/merchant", "/impact"].includes(requested));
-  redirect(allowed ? requested : user.role === "SUPERVISOR" ? "/merchant" : "/orders");
+    (!isSupervisorRole(user.role) || !["/merchant", "/impact"].includes(requested))
+    ? true
+    : !!requested;
+  const roleRedirect = isSupervisorRole(user.role) ? "/merchant" : "/orders";
+  redirect(allowed ? requested : roleRedirect);
 }
 
 // Handles the signup process for new users
@@ -37,15 +40,14 @@ export async function signUp(formData: FormData) {
   if (password.length < 8) redirect("/signup?error=password");
   if (password !== confirmPassword) redirect("/signup?error=match");
 
-  let user: { id: string };
+  let user: { id: string; role: "STUDENT" | "OWNER" | "MODERATOR" };
   try {
     user = await prisma.user.create({
       data: {
         name,
         email,
-        password: await hashPassword(password),
+        passwordHash: await hashPassword(password),
         role: "STUDENT",
-        diningHall: { connect: { id: "hall-main" } },
       },
     });
   } catch (error) {

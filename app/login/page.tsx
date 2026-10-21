@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { login } from "@/app/auth-actions";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isSupervisorRole } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export default async function LoginPage({
 }) {
   const user = await getCurrentUser();
   const params = await searchParams;
-  if (user) redirect(user.role === "SUPERVISOR" ? "/merchant" : "/orders");
+  if (user) redirect(isSupervisorRole(user.role) ? "/merchant" : "/orders");
 
   const error = params.error ? errors[params.error] : undefined;
 

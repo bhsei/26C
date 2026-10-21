@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signUp } from "@/app/auth-actions";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isSupervisorRole } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ const errors: Record<string, string> = {
 
 export default async function SignupPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const user = await getCurrentUser();
-  if (user) redirect(user.role === "SUPERVISOR" ? "/merchant" : "/orders");
+  if (user) redirect(isSupervisorRole(user.role) ? "/merchant" : "/orders");
   const params = await searchParams;
 
   return (
