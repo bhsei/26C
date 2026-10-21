@@ -85,6 +85,29 @@ These credentials are for local development only. Change or remove them before d
 | `/student` | Browse and filter closing bags, reserve meals, and view pickup codes |
 | `/merchant` | Dining hall staff dashboard: post bags and confirm pickups |
 
+## AI chatbot (Ollama)
+
+Signed-in users get a floating chat assistant (bottom-right ✳ bubble) that answers general questions and queries live app data — available meals, dining halls, the user's orders and pickup codes, and the current time — through local tool calls.
+
+The assistant runs against a local [Ollama](https://ollama.com) server, so no API key is needed:
+
+1. Install Ollama, then pull a tool-capable model (`qwen2:7b` is the default — `llama3.2` also works but follows instructions less reliably):
+
+   ```bash
+   ollama pull qwen2:7b
+   ```
+
+2. Make sure the server is running (`ollama serve`, usually automatic after install) and set these in `.env` (defaults shown):
+
+   ```bash
+   OLLAMA_BASE_URL=http://localhost:11434
+   OLLAMA_MODEL=qwen2:7b
+   ```
+
+3. Restart `pnpm dev`. Open any dashboard page while signed in and click the ✳ bubble.
+
+Requests are handled by `app/api/chat/route.ts` (login required). Tool definitions and their database queries live in `lib/chat-tools.ts`; the Ollama client and tool-calling loop are in `lib/ollama.ts`. If Ollama is not running, the widget shows a friendly error and the rest of the app is unaffected.
+
 ## Inspect PostgreSQL data with Prisma Studio
 
 With PostgreSQL running and `DATABASE_URL` configured, start Prisma Studio:
@@ -127,6 +150,8 @@ pnpm lint
 app/
   actions.ts             Marketplace server actions
   auth-actions.ts        Login, signup, and logout actions
+  api/chat/route.ts      AI assistant endpoint (login required)
+  components/ChatWidget.tsx  Floating assistant chat bubble
   merchant/page.tsx      Dining hall staff dashboard
   signup/page.tsx        Student registration
   student/page.tsx       Student marketplace
@@ -134,6 +159,8 @@ app/
   generated/prisma/      Generated Prisma Client (do not edit by hand)
 lib/
   auth.ts                Database-backed session helpers and route guards
+  chat-tools.ts          Assistant tool definitions and database queries
+  ollama.ts              Local Ollama client with tool-calling loop
   password.ts            Password hashing and verification
   prisma.ts              Prisma client singleton
 prisma/

@@ -1,6 +1,6 @@
 # Team Contributions Log
 
-Last updated: 2026-10-12
+Last updated: 2026-10-21
 
 ## How to use this file
 - Add an entry every time you complete a meaningful task.
@@ -22,9 +22,10 @@ Last updated: 2026-10-12
 |------|------|-------------|-------|
 | from 2026-10-3 to 2026-10-12 | Built First Draft of the Entity Relationship Diagram | `e4d7087` | 6 |
 | 2026-10-15 | Built Second Draft of the Entity Relationship Diagram | `0d5a7f8` | 4 |
-| 2026-10-19 | New information onto SRS Functional Requirements |  `155c11f/4b2992e` | 4 |
+| 2026-10-19 | Expanded SRS functional requirements (v0.3) | `155c11f`, `4b2992e` | 3 |
 
-## Bianca 比安卡
+## Zamo
 | Date | Task | Commit / PR | Hours |
 |------|------|-------------|-------|
-|from 2026-10-20 to 2026-10-21| Implemented initial version of the in-app notification feature | `3f48b54/7283066/794ce0e` | 5 |
+| 2026-10-21 | Built AI chat assistant: Ollama tool-calling client (`lib/ollama.ts`), live-data tools (`lib/chat-tools.ts`), authenticated `/api/chat` endpoint, floating chat widget; evaluated models and set `qwen2:7b` as default | (uncommitted) | 4 |
+| 2026-10-21 | Updated documentation for the chat assistant: README setup section, `.env.example`, SRS v0.4 (REQ-FUNC-015 + appendices), team log | (uncommitted) | 1 |

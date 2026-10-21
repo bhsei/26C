@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { logout } from "@/app/auth-actions";
+import ChatWidget from "@/app/components/ChatWidget";
 import prisma from "@/lib/prisma";
 import type { User } from "../generated/prisma/client";
 import Notifications from "@/app/components/Notifications";
@@ -74,6 +75,7 @@ export default async function DashboardShell({
         </header>
         <div className="page-content">{children}<footer className="footer"><span>© 2026 SecondHelping</span><span>Making good food go further <b>✳</b></span></footer></div>
       </section>
+      {user ? <ChatWidget /> : null}
     </main>
   );
 }
