@@ -29,3 +29,10 @@ Last updated: 2026-10-21
 |------|------|-------------|-------|
 | 2026-10-21 | Built AI chat assistant: Ollama tool-calling client (`lib/ollama.ts`), live-data tools (`lib/chat-tools.ts`), authenticated `/api/chat` endpoint, floating chat widget; evaluated models and set `qwen2:7b` as default | (uncommitted) | 4 |
 | 2026-10-21 | Updated documentation for the chat assistant: README setup section, `.env.example`, SRS v0.4 (REQ-FUNC-015 + appendices), team log | (uncommitted) | 1 |
+
+## Bianca 比安卡
+| Date | Task | Commit / PR | Hours |
+|------|------|-------------|-------|
+|from 2026-10-20 to 2026-10-21| Implemented initial version of the in-app notification feature | `3f48b54/7283066/794ce0e` | 5 |
+|2026-10-22| Corrected notification logic and created an interval to verify order status and sent user reminders | `acbc3e8/2354190` | 2
+|2026-10-22| Increase range of notifications sent according to changes in order and listing status | `43c6ca6` | 1
