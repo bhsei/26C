@@ -151,8 +151,10 @@ app/
   actions.ts             Marketplace server actions
   auth-actions.ts        Login, signup, and logout actions
   api/chat/route.ts      AI assistant endpoint (login required)
+  api/notifications/route.ts Notifications trigger logic
   components/ChatWidget.tsx  Floating assistant chat bubble
   merchant/page.tsx      Dining hall staff dashboard
+  notifications/actions/ Notifications engine
   signup/page.tsx        Student registration
   student/page.tsx       Student marketplace
   page.tsx               Login page

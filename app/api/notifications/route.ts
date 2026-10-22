@@ -13,13 +13,7 @@ export async function GET() {
       reminderOpenSent: false,
       pickupWindowStart: { gt: now, lte: tenMinsFromNow },
     },
-    include: {
-      listing: {
-        include: {
-          food: true, // Includes the food details so we can get the name
-        },
-      },
-    },
+    include: { listing: { include: { food: true } } },
   });
 
   for (const order of openingSoonOrders) {
@@ -29,7 +23,6 @@ export async function GET() {
         message: `Get ready! Your pickup window for ${order.listing.food.name} opens in 10 minutes. Your pickup code is: ${order.pickupCode}.`,
       },
     });
-    // Mark as sent
     await prisma.order.update({
       where: { id: order.id },
       data: { reminderOpenSent: true },
@@ -44,30 +37,18 @@ export async function GET() {
       pickupWindowStart: { lte: now },
       pickupWindowEnd: { gt: now },
     },
-    include: {
-      listing: {
-        include: {
-          food: true, 
-        },
-      },
-    },
+    include: { listing: { include: { food: true } } },
   });
 
-  let alreadyOpenRemindersSent = 0;
-
   for (const order of alreadyOpenOrders) {
-    // Strictly check if the order was placed WHILE the window was open.
-    if (order.createdAt >= order.pickupWindowStart) {
-      await prisma.notification.create({
-        data: {
-          userId: order.studentId,
-          message: `Ready for pickup! Your window for ${order.listing.food.name} is open right now. Head over and show your pickup code: ${order.pickupCode}.`,
-        },
-      });
-      alreadyOpenRemindersSent++;
-    }
+    // REMOVED the createdAt check. If they are in this list, they need to know the window is open.
+    await prisma.notification.create({
+      data: {
+        userId: order.studentId,
+        message: `Ready for pickup! Your window for ${order.listing.food.name} is open right now. Head over and show your pickup code: ${order.pickupCode}.`,
+      },
+    });
     
-    // Mark as sent regardless, so the cron job doesn't evaluate this order again next time
     await prisma.order.update({
       where: { id: order.id },
       data: { reminderOpenSent: true },
@@ -81,13 +62,7 @@ export async function GET() {
       reminderCloseSent: false,
       pickupWindowEnd: { gt: now, lte: thirtyMinsFromNow },
     },
-    include: {
-      listing: {
-        include: {
-          food: true, 
-        },
-      },
-    },
+    include: { listing: { include: { food: true } } },
   });
 
   for (const order of closingSoonOrders) {
@@ -97,7 +72,6 @@ export async function GET() {
         message: `Warning: Your pickup window for ${order.listing.food.name} closes in 30 minutes! Please pick up your order. Don't forget to show your pickup code: ${order.pickupCode}.`,
       },
     });
-    // Mark as sent
     await prisma.order.update({
       where: { id: order.id },
       data: { reminderCloseSent: true },
@@ -107,7 +81,7 @@ export async function GET() {
   return NextResponse.json({ 
     success: true, 
     openingRemindersSent: openingSoonOrders.length, 
-    alreadyOpenRemindersSent, 
+    alreadyOpenRemindersSent: alreadyOpenOrders.length, 
     closingRemindersSent: closingSoonOrders.length 
   });
 }
