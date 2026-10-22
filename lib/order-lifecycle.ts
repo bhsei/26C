@@ -27,6 +27,7 @@ export async function settleUnavailableOrders(now = new Date()) {
         },
       },
     },
+    // 1. UPDATED: Fetch the required notification data alongside the financial data
     select: {
       id: true,
       status: true,
@@ -34,7 +35,15 @@ export async function settleUnavailableOrders(now = new Date()) {
       quantity: true,
       platformFeeCents: true,
       serviceFeeCents: true,
-      listing: { select: { status: true } },
+      studentId: true,
+      pickupCode: true,
+      listing: {
+        select: {
+          status: true,
+          food: { select: { name: true } },
+          diningHall: { select: { supervisors: { select: { id: true } } } },
+        },
+      },
     },
   });
 
@@ -44,6 +53,7 @@ export async function settleUnavailableOrders(now = new Date()) {
     const refundAmountCents = paid
       ? order.finalPriceCents * order.quantity + order.platformFeeCents + order.serviceFeeCents
       : 0;
+
     await prisma.order.updateMany({
       where: { id: order.id, status: order.status },
       data: {
@@ -53,5 +63,43 @@ export async function settleUnavailableOrders(now = new Date()) {
         updatedAt: now,
       },
     });
+
+    // 2. NEW: Generate and dispatch notifications if it was a confirmed reservation
+    if (paid) {
+      const notifications = [];
+      const foodName = order.listing.food.name;
+
+      if (withdrawn) {
+        // Scenario A: The Merchant withdrew the listing
+        notifications.push({
+          userId: order.studentId,
+          message: `Your order for ${foodName} was cancelled and refunded because the listing was withdrawn.`,
+        });
+        for (const supervisor of order.listing.diningHall.supervisors) {
+          notifications.push({
+            userId: supervisor.id,
+            message: `An order for ${foodName} (Code: ${order.pickupCode}) was cancelled because the listing was withdrawn.`,
+          });
+        }
+      } else {
+        // Scenario B: The user missed the pickup window
+        notifications.push({
+          userId: order.studentId,
+          message: `You missed your pickup window for ${foodName}. The order has expired.`,
+        });
+        for (const supervisor of order.listing.diningHall.supervisors) {
+          notifications.push({
+            userId: supervisor.id,
+            message: `An order for ${foodName} (Code: ${order.pickupCode}) has expired without being picked up.`,
+          });
+        }
+      }
+
+      if (notifications.length > 0) {
+        await prisma.notification.createMany({
+          data: notifications,
+        });
+      }
+    }
   }
 }

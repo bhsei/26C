@@ -167,18 +167,53 @@ export async function claimListing(formData: FormData) {
 export async function confirmPickup(formData: FormData) {
   const supervisor = await requireRole("SUPERVISOR");
   if (!supervisor.diningHallId) return;
+  
   const now = new Date();
   await settleUnavailableOrders(now);
+  
   const orderId = String(formData.get("orderId") ?? "");
   if (!orderId) return;
 
-  await prisma.order.updateMany({
+  // 1. Find the order first so we know who to notify and what the food is
+  const order = await prisma.order.findFirst({
     where: {
       id: orderId,
       status: "RESERVED",
-      listing: { is: { diningHallId: supervisor.diningHallId, pickupWindowEnd: { gt: now }, status: { notIn: ["EXPIRED", "WITHDRAWN"] } } },
+      listing: { 
+        is: { 
+          diningHallId: supervisor.diningHallId, 
+          pickupWindowEnd: { gt: now }, 
+          status: { notIn: ["EXPIRED", "WITHDRAWN"] } 
+        } 
+      },
     },
+    include: {
+      listing: {
+        include: { food: true }
+      }
+    }
+  });
+
+  if (!order) return; // Order not found or not eligible for pickup
+
+  // 2. Update the order status
+  await prisma.order.update({
+    where: { id: order.id },
     data: { status: "PICKED_UP", pickedUpAt: now },
+  });
+
+  // 3. Format the time (e.g., "02:30 PM")
+  const timeString = now.toLocaleTimeString("en-US", { 
+    hour: "2-digit", 
+    minute: "2-digit" 
+  });
+
+  // 4. Send the success notification to the student
+  await prisma.notification.create({
+    data: {
+      userId: order.studentId,
+      message: `Success! Your order for ${order.listing.food.name} was successfully picked up at ${timeString}. Enjoy your meal!`,
+    },
   });
 
   revalidatePath("/merchant");
@@ -256,14 +291,38 @@ export async function confirmPayment(formData: FormData) {
   }
 
   if (result.count > 0) {
-    // Fetch the updated order so we have its ID to trigger notifications
+    // Include the nested food details so we can use the name
     const confirmedOrder = await prisma.order.findFirst({
-      where: { paymentRef: ref }
+      where: { paymentRef: ref },
+      include: {
+        listing: {
+          include: { food: true }
+        }
+      }
     });
     
     if (confirmedOrder) {
-      // Trigger the notifications now that the order is fully paid and has a pickup code
+      // Trigger merchant notifications (if you have them)
       await sendOrderPlacedNotifications(confirmedOrder.id);
+
+      const now = new Date();
+      
+      // CHECK: Is the pickup window already open right now?
+      if (confirmedOrder.pickupWindowStart <= now && confirmedOrder.pickupWindowEnd > now) {
+        // Send the notification immediately
+        await prisma.notification.create({
+          data: {
+            userId: confirmedOrder.studentId,
+            message: `Ready for pickup! Your window for ${confirmedOrder.listing.food.name} is open right now. Head over and show your pickup code: ${confirmedOrder.pickupCode}.`,
+          }
+        });
+
+        // Mark it as sent so the cron job completely ignores it
+        await prisma.order.update({
+          where: { id: confirmedOrder.id },
+          data: { reminderOpenSent: true }
+        });
+      }
     }
   }
 
