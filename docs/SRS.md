@@ -1,7 +1,7 @@
-﻿# Software Requirements Specification
+# Software Requirements Specification
 ## For SecondHelping
 
-Version 0.4
+Version 0.5
 Prepared by Bianca Zavadisk, Geming Wu, Gabriel Silva, Marwen Jadlaoui and Zamo Rzgar
 
 
@@ -37,6 +37,7 @@ Prepared by Bianca Zavadisk, Geming Wu, Gabriel Silva, Marwen Jadlaoui and Zamo 
 | Future AI expansion | 2026/10/12 | Added roadmap for predictive surplus, dynamic pricing, and food-circulation optimization | 0.2 |
 | Detailed requirements | 2026/10/19 | Expanded functional requirements with status, priority, preconditions, and acceptance criteria | 0.3 |
 | AI chat assistant | 2026/10/21 | Documented the implemented conversational assistant (REQ-FUNC-015), added the Ollama software interface, and updated the route and data-model appendices | 0.4 |
+| AI meal image matching | 2026/10/26 | Documented supervisor photo-to-food selection, local vision-model configuration, fallback, and partial REQ-FUNC-011 implementation | 0.5 |
 
 ## 1. Introduction
 SecondHelping is a campus food-recovery and food-circulation application designed to reduce surplus food waste while helping students access low-cost meals before dining halls close. The current prototype is a reactive marketplace in which supervisors post closing-bag listings and students reserve remaining meals, supported by a conversational AI assistant that answers questions over live marketplace data. The future product direction, described in this document, extends the system from a simple rescue marketplace into an autonomous campus food-circulation network that predicts surplus before it happens, prevents avoidable waste, routes remaining food to its next best use, and measures environmental and social impact.
@@ -45,9 +46,9 @@ SecondHelping is a campus food-recovery and food-circulation application designe
 This Software Requirements Specification (SRS) describes the functionality and constraints of SecondHelping at two maturity levels: the current operational prototype and the planned future AI-driven system. The document is intended for product stakeholders, developers, testers, and campus operators who need a shared understanding of what the system must do and how future improvements connect to the present product. It defines the product behavior, constraints, and verification expectations without describing a single implementation strategy.
 
 ### 1.2 Product Scope
-The current system scope includes role-based login, student browsing, dining-hall listing creation, reservation flow, pickup confirmation, a conversational AI assistant, and summary reporting. The planned future scope adds predictive surplus forecasting, prep optimization, AI-assisted listing creation, dynamic pricing, route-based food redistribution, and environmental impact estimation. The system may therefore evolve from a closing-bag marketplace into a broader campus circular-economy platform.
+The current system scope includes role-based login, student browsing, dining-hall listing creation, image-based food catalog suggestions, reservation flow, pickup confirmation, a conversational AI assistant, and summary reporting. The planned future scope adds predictive surplus forecasting, prep optimization, expanded multimodal listing assistance, dynamic pricing, route-based food redistribution, and environmental impact estimation. The system may therefore evolve from a closing-bag marketplace into a broader campus circular-economy platform.
 
-The in-scope features for the near term are: student and supervisor user accounts, listing publication, allergen-aware filtering, order management, pickup code confirmation, the AI chat assistant, and operational metric dashboards. Out-of-scope items for the current phase include integrated payment processing, full supply-chain optimization, and advanced autonomous decision-making across multiple campuses.
+The in-scope features for the near term are: student and supervisor user accounts, listing publication, allergen-aware filtering, order management, pickup code confirmation, the AI chat assistant, image-based food selection for supervisors, and operational metric dashboards. Out-of-scope items for the current phase include integrated payment processing, full supply-chain optimization, and advanced autonomous decision-making across multiple campuses.
 
 ### 1.3 Definitions, Acronyms, and Abbreviations
 
@@ -96,13 +97,14 @@ The current product provides the following core functions:
 - Simulated payment with automatic refund handling for expired or withdrawn listings.
 - Pickup-code generation and pickup confirmation.
 - AI chat assistant that answers questions about meals, dining halls, orders, pickup codes, and general topics using live marketplace data through local tool calling.
+- Supervisor image-based suggestions for existing Food catalog entries during listing creation.
 - Metrics for rescued meals, saved money, and order totals.
 
 The planned future product provides additional functions:
 
 - Predictive surplus forecasting from sales, menu patterns, weather, and campus events.
 - Prep optimization to reduce overproduction before excess food appears.
-- AI-assisted listing creation from photos or voice input.
+- Expanded multimodal listing creation from photos or voice input, including suggestions for fields beyond the existing image-to-food catalog selection.
 - Dynamic pricing based on inventory, time left, and fairness rules.
 - Rescue routing to food banks, shelters, staff meal channels, or compost streams.
 - Real-time impact estimation for meals diverted, carbon avoided, and water saved.
@@ -461,36 +463,35 @@ Simulation can help supervisors assess production adjustments before applying th
 
 #### REQ-FUNC-011 — Multimodal Listing Assistant
 
-**Status:** Planned
+**Status:** Partially implemented (image-based food selection is implemented; voice input and generation of other listing fields remain planned)
 
 **Priority:** Should have
 
 **Statement:**
 
-The future system shall support image and/or voice input to generate a structured draft of a meal listing, including a suggested item description and proposed pricing and pickup information when sufficient information is available.
+The system shall allow an authorized supervisor to upload a meal image and receive a suggestion for an existing Food catalog item in the listing form. Future extensions may support voice input and suggestions for additional listing fields.
 
 **Rationale:**
 
-Multimodal listing assistance can reduce the time required for supervisors to publish surplus meal offers.
+Image-based catalog matching can reduce manual dish selection while keeping the supervisor in control of listing details and publication.
 
 **Preconditions:**
 
 - An authorized supervisor is authenticated.
-- The relevant image or audio input is accessible and supported by the system.
-- The multimodal processing service is available.
+- A supported image and an existing Food catalog are available.
+- The local Ollama vision model and Python matcher are available.
 
 **Acceptance Criteria:**
 
-1. The supervisor can submit a supported image or voice input.
-2. The system generates a structured listing draft from the submitted input.
-3. Fields that cannot be determined reliably are marked as missing or requiring confirmation.
-4. Suggested prices and pickup times are identified as recommendations rather than verified facts.
-5. The supervisor can review and edit the draft before publication.
-6. No listing is published automatically without the required supervisor approval.
-7. Processing failures are communicated to the supervisor without preventing manual listing creation.
+1. The supervisor can upload and preview a JPEG, PNG, WebP, or GIF image of up to 10 MB from Publish Listings.
+2. Selecting Process invokes the local vision matcher with the current Food catalog and suggests only an existing catalog entry.
+3. A successful prediction selects the corresponding item in the existing Food selector.
+4. The supervisor can review or change the selected food before publishing.
+5. Image processing does not set price, discount, quantity, or pickup information and does not publish a listing.
+6. If processing fails or no match is returned, manual food selection and listing creation remain available.
+7. Uploaded images and generated catalog files are removed from temporary storage after processing.
 
-**Verification Method:** Demonstration, functional tests, and parsing/evaluation of extracted fields against manually verified reference data.
-
+**Verification Method:** Demonstration, authenticated endpoint checks, upload format and size checks, manual fallback checks, and evaluation against labeled meal photos.
 #### REQ-FUNC-012 — Dynamic Pricing Agent
 
 **Status:** Planned
@@ -634,7 +635,7 @@ The current platform shall be available during expected operating periods. For A
 The system shall handle student and staff account data responsibly. It must store only the minimum user information necessary for authentication, authorization, and service delivery. Chat assistant conversations are processed entirely on the locally hosted model and are not sent to external AI services or persisted by the application. Any future AI features must consider privacy, fairness, and explainability requirements before making pricing or redistribution decisions that affect community members.
 
 ### 3.5 Design and Implementation
-The system shall continue to use a layered architecture with clear separation between user interface, service logic, and persistence. The current data model includes User, DiningHall, Food, Listing, Order, and AuthSession; future AI features can extend this model with prediction outputs, pricing policies, routing records, and impact metrics. The conversational assistant is implemented as an authenticated API route (`app/api/chat/route.ts`), a local Ollama client with a tool-calling loop (`lib/ollama.ts`), bounded data-access tools (`lib/chat-tools.ts`), and a floating chat widget (`app/components/ChatWidget.tsx`).
+The system shall continue to use a layered architecture with clear separation between user interface, service logic, and persistence. The current data model includes User, DiningHall, Food, Listing, Order, and AuthSession; future AI features can extend this model with prediction outputs, pricing policies, routing records, and impact metrics. The conversational assistant is implemented as an authenticated API route (`app/api/chat/route.ts`), a local Ollama client with a tool-calling loop (`lib/ollama.ts`), bounded data-access tools (`lib/chat-tools.ts`), and a floating chat widget (`app/components/ChatWidget.tsx`). Image-based food selection is implemented by the authenticated supervisor endpoint (`app/api/food-image-match/route.ts`), the client upload component (`app/components/FoodImageMatcher.tsx`), and the Python matcher (`app/scripts/classify_meal.py`), which uses `OLLAMA_VISION_MODEL` independently of the chatbot text model. Image files are temporary and the endpoint only returns an existing Food ID; listing details and publication remain supervisor-controlled.
 
 ### 3.6 AI/ML
 The future product direction includes the following AI modules:
@@ -648,8 +649,9 @@ The future product direction includes the following AI modules:
    - Uses forecasting, simulation, and optimization logic.
 
 3. Multimodal Listing Copilot
-   - Accepts photos or spoken descriptions of leftover dishes and transforms them into listing drafts automatically.
-   - Supports a faster listing flow with structured item recognition and discount recommendation.
+   - The current prototype accepts meal photos and suggests an existing Food catalog item in the supervisor listing form.
+   - The supervisor confirms the food and enters listing details manually; image processing does not set price or discount and does not publish the listing.
+   - Voice input and automated suggestions for descriptions, pricing, or pickup information remain future extensions.
 
 4. Dynamic Pricing Agent
    - Uses contextual pricing to balance student savings, waste reduction, merchant outcomes, and fairness constraints.
@@ -691,6 +693,7 @@ Verification shall be performed at two levels: the current prototype and the fut
 | `/impact` | Supervisor impact report (rescued meals, savings) |
 | `/pay/[ref]` | Simulated payment page for a reservation |
 | `/api/chat` | Authenticated conversational-assistant endpoint |
+| `/api/food-image-match` | Supervisor-only image-to-food catalog suggestion endpoint |
 
 ### Appendix B: Current data model summary
 
@@ -716,5 +719,8 @@ pnpm prisma migrate deploy
 pnpm prisma generate
 pnpm prisma db seed
 ollama pull qwen2:7b   # local model for the chat assistant
+ollama pull qwen2.5vl:3b  # local vision model for meal photo matching
 pnpm dev
 ```
+
+

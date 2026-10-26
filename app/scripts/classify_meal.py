@@ -38,6 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("image", type=Path, help="Meal image: JPEG, PNG, WebP, or GIF")
     parser.add_argument("--catalog", type=Path, required=True, help="JSON array of {id, name, description?}")
     parser.add_argument("--max-bytes", type=int, default=10 * 1024 * 1024, help="Maximum image size (default: 10 MiB)")
+    parser.add_argument("--id-only", action="store_true", help="Print only the predicted catalog ID; print nothing when uncertain")
     return parser.parse_args()
 
 
@@ -80,7 +81,7 @@ def main() -> int:
         if mime not in {"image/jpeg", "image/png", "image/webp", "image/gif"}:
             raise ValueError("Unsupported image type. Use JPEG, PNG, WebP, or GIF.")
 
-        model = os.environ.get("OLLAMA_MODEL", "qwen2.5vl:3b")
+        model = os.environ.get("OLLAMA_VISION_MODEL", "qwen2.5vl:3b")
         base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
         body = {
             "model": model,
@@ -108,7 +109,10 @@ def main() -> int:
         food_id = result.get("food_id")
         if food_id is not None and food_id not in valid_ids:
             raise ValueError("Model returned an ID that is not in the supplied catalog.")
-        if food_id is None:
+        if args.id_only:
+            if food_id is not None:
+                print(food_id)
+        elif food_id is None:
             print("No confident match")
         else:
             selected = next(item for item in catalog if item["id"] == food_id)

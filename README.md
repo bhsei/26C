@@ -8,6 +8,7 @@ SecondHelping is a campus surplus-food marketplace. Dining hall staff post closi
 - Role-based access: students use `/student`; dining hall supervisors use `/merchant`.
 - Unauthenticated visitors to either dashboard are redirected to the login page at `/`.
 - Staff can publish a closing bag with quantity, regular price, discount, allergens, and pickup window.
+- Supervisors can match a meal photo to an existing food catalog item while preparing a listing.
 - Students can filter available meals by dining hall and allergens, then reserve a meal.
 - Each reservation has a pickup code. Staff can confirm pickup from the dashboard.
 - The food team dashboard summarizes rescued meals, orders, and student savings.
@@ -108,6 +109,25 @@ The assistant runs against a local [Ollama](https://ollama.com) server, so no AP
 
 Requests are handled by `app/api/chat/route.ts` (login required). Tool definitions and their database queries live in `lib/chat-tools.ts`; the Ollama client and tool-calling loop are in `lib/ollama.ts`. If Ollama is not running, the widget shows a friendly error and the rest of the app is unaffected.
 
+## AI meal photo matching (Ollama)
+
+Supervisors can upload a meal photo from **Publish Listings** and select **Process** to suggest a matching existing food catalog item. The photo is previewed in the browser; image processing only changes the Food selector. Supervisors still review the choice and enter all listing details, including price and discount, manually. It does not create or publish a listing. If identification fails or is uncertain, choose a food manually.
+
+The matcher runs locally through Ollama and requires Python 3.10+ on the application server. Pull the vision model separately from the chatbot model:
+
+```bash
+ollama pull qwen2.5vl:3b
+```
+
+Set these in `.env` (defaults shown):
+
+```bash
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_VISION_MODEL=qwen2.5vl:3b
+```
+
+`OLLAMA_VISION_MODEL` is separate from `OLLAMA_MODEL`, which configures the text-only chatbot. The API route runs `app/scripts/classify_meal.py`; on Windows it calls `python` from `PATH`, or you can set `PYTHON_PATH` to the Python executable. The endpoint accepts JPEG, PNG, WebP, and GIF images up to 10 MB. The uploaded image and generated catalog file are held in a temporary directory and removed after processing.
+
 ## Inspect PostgreSQL data with Prisma Studio
 
 With PostgreSQL running and `DATABASE_URL` configured, start Prisma Studio:
@@ -151,13 +171,16 @@ app/
   actions.ts             Marketplace server actions
   auth-actions.ts        Login, signup, and logout actions
   api/chat/route.ts      AI assistant endpoint (login required)
+  api/food-image-match/route.ts  Supervisor meal-image matching endpoint
   api/notifications/route.ts Notifications trigger logic
   components/ChatWidget.tsx  Floating assistant chat bubble
+  components/FoodImageMatcher.tsx  Meal photo upload and food selector
   merchant/page.tsx      Dining hall staff dashboard
   notifications/actions/ Notifications engine
   signup/page.tsx        Student registration
   student/page.tsx       Student marketplace
   page.tsx               Login page
+  scripts/classify_meal.py  Local Ollama vision-model catalog matcher
   generated/prisma/      Generated Prisma Client (do not edit by hand)
 lib/
   auth.ts                Database-backed session helpers and route guards
@@ -171,3 +194,5 @@ prisma/
   seed.ts                Destructive local demo-data seed
 prisma7.config.ts        Prisma 7 schema, migration, seed, and datasource config
 ```
+
+

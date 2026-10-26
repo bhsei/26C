@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma";
 import { confirmPickup, createListing, withdrawListing } from "@/app/actions";
 import { requireRole } from "@/lib/auth";
 import DashboardShell from "@/app/components/DashboardShell";
+import FoodImageMatcher from "@/app/components/FoodImageMatcher";
 import { settleUnavailableOrders } from "@/lib/order-lifecycle";
 import type { ListingStatus, OrderStatus } from "../generated/prisma/client";
 
@@ -42,12 +43,14 @@ export default async function MerchantPage() {
         <Stat label="Student savings this term" value={money(savings)} />
         <Stat label="Orders this term" value={String(termOrders.length)} />
       </section>
-      <section className="max-w-2xl space-y-3 rounded-xl border border-blue-200 bg-blue-50/50 p-5 shadow-sm">
+      <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+      <div className="space-y-3 rounded-xl border border-blue-200 bg-white p-5 shadow-sm">
         <div><h2 className="font-semibold text-blue-900">Post a closing bag</h2><p className="text-sm text-blue-700">Set the regular price, discount, quantity, and pickup window.</p></div>
         <form action={createListing} className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-sm text-blue-800 sm:col-span-2">
             Food
             <select
+              id="foodId"
               name="foodId"
               required
               defaultValue=""
@@ -88,7 +91,10 @@ export default async function MerchantPage() {
           </div>
           <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 sm:col-span-2">Publish closing bag</button>
         </form>
+      </div>
+      <FoodImageMatcher />
       </section>
+      
       <section className="space-y-4"><h2 className="font-semibold text-blue-900">Listings and orders</h2>
         {diningHall.listings.map((listing) => <article key={listing.id} className="space-y-3 rounded-xl border border-blue-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="font-medium">{listing.food.name}</h3>
@@ -106,5 +112,5 @@ export default async function MerchantPage() {
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4"><p className="text-sm text-blue-700">{label}</p><p className="mt-1 text-2xl font-bold">{value}</p></div>;
+  return <div className="rounded-xl border border-blue-200 bg-white p-4"><p className="text-sm text-blue-700">{label}</p><p className="mt-1 text-2xl font-bold">{value}</p></div>;
 }
