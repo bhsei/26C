@@ -8,9 +8,11 @@ import base64
 import json
 import mimetypes
 import os
+import io
 import sys
 import urllib.error
 import urllib.request
+from PIL import Image
 from pathlib import Path
 
 
@@ -65,6 +67,15 @@ def load_catalog(path: Path) -> list[dict[str, str]]:
     return catalog
 
 
+# Compress the image to reduce size while maintaining quality.
+def compress_image(image_path, max_size=(1024, 1024), quality=80):
+    img = Image.open(image_path)
+    img.thumbnail(max_size, Image.Resampling.LANCZOS)
+    buffer = io.BytesIO()
+    img.convert("RGB").save(buffer, format="JPEG", quality=quality)
+    return buffer.getvalue()
+
+
 def main() -> int:
     args = parse_args()
     if args.max_bytes <= 0:
@@ -92,7 +103,7 @@ def main() -> int:
             "messages": [{
                 "role": "user",
                 "content": PROMPT.format(catalog=json.dumps(catalog, ensure_ascii=False)),
-                "images": [base64.b64encode(args.image.read_bytes()).decode("ascii")],
+                "images": [base64.b64encode(compress_image(args.image)).decode("ascii")],
             }],
         }
         request = urllib.request.Request(
