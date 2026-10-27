@@ -6,8 +6,8 @@ console.log("⏱️ Background Cron Job started...");
 // Run every 1 minute (60000 milliseconds)
 setInterval(() => {
   // Node 18+ has native fetch, so we just ping the local Next.js server
+  console.log("Running notifications script");
   fetch("http://localhost:3000/api/notifications")
-    console.log("Running notifications script")
     .then(res => res.json())
     .then(data => {
       if (data.openingRemindersSent > 0 || data.alreadyOpenRemindersSent > 0 || data.closingRemindersSent > 0) {
