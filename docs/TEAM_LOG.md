@@ -37,5 +37,5 @@ Last updated: 2026-10-27
 | Date | Task | Commit / PR | Hours |
 |------|------|-------------|-------|
 |from 2026-10-20 to 2026-10-21| Implemented initial version of the in-app notification feature | `3f48b54/7283066/794ce0e` | 5 |
-|2026-10-22| Corrected notification logic and created an interval to verify order status and sent user reminders | `acbc3e8/2354190` | 2
-|2026-10-22| Increase range of notifications sent according to changes in order and listing status | `43c6ca6` | 1
+|2026-10-22| Corrected notification logic and created an interval to verify order status and sent user reminders | `acbc3e8/2354190` | 2 |
+|2026-10-22| Increase range of notifications sent according to changes in order and listing status | `43c6ca6` | 1 |
