@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
   const system: ChatMessage = {
     role: "system",
-    content: buildSystemPrompt(user.name ?? "a SecondHelping user", user.role.toLowerCase(), hallName),
+    content: buildSystemPrompt(user.name ?? "a SecondHelping user", user.role === "SUPERVISOR" ? "staff member" : "student", hallName),
   };
 
   try {

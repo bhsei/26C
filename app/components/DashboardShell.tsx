@@ -42,7 +42,7 @@ export default async function DashboardShell({
         </nav>
         <div className="sidebar-bottom">
           <div className="impact-mini"><span className="leaf-icon">✳</span><p>Good food deserves<br />a second helping.</p><small>Meals saved from waste</small><strong>Make every meal count</strong></div>
-          {user ? <div className="user-row"><span className="avatar">{(user.name ?? "SH").slice(0, 2).toUpperCase()}</span><span className="user-row-info" title={supervisor ? `Supervisor · ${hallLabel}` : "Student account"}><b>{user.name ?? "SecondHelping user"}</b><small>{supervisor ? `Supervisor · ${hallLabel}` : "Student account"}</small></span><form action={logout}><button className="more" aria-label="Log out" title="Log out">↪</button></form></div> : <Link href="/login" className="user-row"><span className="avatar">SH</span><span><b>Welcome</b><small>Sign in to your account</small></span><span className="more">↗</span></Link>}
+          {user ? <div className="user-row"><span className="avatar">{(user.name ?? "SH").slice(0, 2).toUpperCase()}</span><span className="user-row-info" title={supervisor ? `Staff member · ${hallLabel}` : "Student account"}><b>{user.name ?? "SecondHelping user"}</b><small>{supervisor ? `Staff member · ${hallLabel}` : "Student account"}</small></span><form action={logout}><button className="more" aria-label="Log out" title="Log out">↪</button></form></div> : <Link href="/login" className="user-row"><span className="avatar">SH</span><span><b>Welcome</b><small>Sign in to your account</small></span><span className="more">↗</span></Link>}
         </div>
       </aside>
       <section className="dashboard-main">
@@ -56,7 +56,7 @@ export default async function DashboardShell({
             
             {user ? (
               <span className="live-pill" title={supervisor ? `Assigned dining hall: ${hallLabel}` : undefined}>
-                <i /> {supervisor ? `Supervisor · ${hallLabel}` : "Student account"}
+                <i /> {supervisor ? `Staff member · ${hallLabel}` : "Student account"}
               </span>
             ) : (
               <span className="live-pill"><i /> Browse as guest</span>

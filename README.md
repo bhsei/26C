@@ -5,10 +5,10 @@ SecondHelping is a campus surplus-food marketplace. Dining hall staff post closi
 ## Current features
 
 - Student sign-up and login, with hashed passwords and database-backed sessions.
-- Role-based access: students use `/student`; dining hall supervisors use `/merchant`.
+- Role-based access: students use `/student`; dining hall staff members use `/merchant`.
 - Unauthenticated visitors to either dashboard are redirected to the login page at `/`.
 - Staff can publish a closing bag with quantity, regular price, discount, allergens, and pickup window.
-- Supervisors can match a meal photo to an existing food catalog item while preparing a listing.
+- Staff members can match a meal photo to an existing food catalog item while preparing a listing.
 - Students can filter available meals by dining hall and allergens, then reserve a meal.
 - Each reservation has a pickup code. Staff can confirm pickup from the dashboard.
 - The food team dashboard summarizes rescued meals, orders, and student savings.
@@ -67,13 +67,13 @@ This is a prototype: it does not process payments, send notifications, or scan p
 
 ## Sign-in and demo accounts
 
-New accounts created at `/signup` are student accounts. Supervisor accounts must be provisioned separately. After seeding, these local demo accounts are available:
+New accounts created at `/signup` are student accounts. Staff member accounts must be provisioned separately. After seeding, these local demo accounts are available:
 
 | Role | Email | Password |
 |---|---|---|
 | Student | `stu1@buaa.test` | `studentstudent` |
-| Main Dining Hall supervisor | `sup1@buaa.test` | `adminadmin` |
-| 2nd Dining Hall supervisor | `sup2@buaa.test` | `adminadmin` |
+| Main Dining Hall staff member | `sup1@buaa.test` | `adminadmin` |
+| 2nd Dining Hall staff member | `sup2@buaa.test` | `adminadmin` |
 
 These credentials are for local development only. Change or remove them before deploying the app. Legacy seeded passwords are upgraded to hashed passwords when the account next logs in.
 
@@ -111,7 +111,7 @@ Requests are handled by `app/api/chat/route.ts` (login required). Tool definitio
 
 ## AI meal photo matching (Ollama)
 
-Supervisors can upload a meal photo from **Publish Listings** and select **Process** to suggest a matching existing food catalog item. The photo is previewed in the browser; image processing only changes the Food selector. Supervisors still review the choice and enter all listing details, including price and discount, manually. It does not create or publish a listing. If identification fails or is uncertain, choose a food manually.
+Staff members can upload a meal photo from **Publish Listings** and select **Process** to suggest a matching existing food catalog item. The photo is previewed in the browser; image processing only changes the Food selector. Staff members still review the choice and enter all listing details, including price and discount, manually. It does not create or publish a listing. If identification fails or is uncertain, choose a food manually.
 
 The matcher runs locally through Ollama and requires Python 3.10+ on the application server. Pull the vision model separately from the chatbot model:
 
@@ -171,7 +171,7 @@ app/
   actions.ts             Marketplace server actions
   auth-actions.ts        Login, signup, and logout actions
   api/chat/route.ts      AI assistant endpoint (login required)
-  api/food-image-match/route.ts  Supervisor meal-image matching endpoint
+  api/food-image-match/route.ts  Staff meal-image matching endpoint
   api/notifications/route.ts Notifications trigger logic
   components/ChatWidget.tsx  Floating assistant chat bubble
   components/FoodImageMatcher.tsx  Meal photo upload and food selector

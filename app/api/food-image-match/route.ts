@@ -29,8 +29,8 @@ function hasValidSignature(bytes: Buffer, mimeType: string) {
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Sign in as a supervisor to identify a meal." }, { status: 401 });
-  if (user.role !== "SUPERVISOR") return NextResponse.json({ error: "Only supervisors can identify listing meals." }, { status: 403 });
+  if (!user) return NextResponse.json({ error: "Sign in as a staff member to identify a meal." }, { status: 401 });
+  if (user.role !== "SUPERVISOR") return NextResponse.json({ error: "Only staff members can identify listing meals." }, { status: 403 });
 
   const declaredLength = Number(request.headers.get("content-length") ?? 0);
   if (declaredLength > MAX_IMAGE_BYTES + 64 * 1024) {

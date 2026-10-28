@@ -22,6 +22,9 @@ next-env.d.ts
 # production
 /build
 
+# personal file
+docs/ppts/progress-oct20-27-slides-template.md
+
 # misc
 .DS_Store
 *.pem
