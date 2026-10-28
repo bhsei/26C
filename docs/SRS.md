@@ -1,10 +1,13 @@
 # Software Requirements Specification
 ## For SecondHelping
 
-Version 1.1 — Peer-Review Baseline
-2026/10/28
+Version 1.1
+
 Prepared by Bianca Zavadisk, Geming Wu, Gabriel Silva, Marwen Jadlaoui and Zamo Rzgar
+
 Beihang University · Software Engineering · Team: The Debuggers
+
+2026/10/28
 
 ## Table of Contents
 * [1. Introduction](#1-introduction)
