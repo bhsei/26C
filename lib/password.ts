@@ -15,18 +15,10 @@ export async function hashPassword(password: string) {
 export async function verifyPassword(password: string, stored: string) {
   const [algorithm, salt, encodedKey] = stored.split("$");
   if (algorithm !== "scrypt" || !salt || !encodedKey) {
-    // Upgrade accounts created before password hashing was introduced.
-    return safeEqual(password, stored);
+    return false;
   }
 
   const expected = Buffer.from(encodedKey, "base64url");
   const actual = (await scrypt(password, salt, expected.length)) as Buffer;
   return expected.length === actual.length && timingSafeEqual(expected, actual);
-}
-
-// Compares two strings in a timing-safe manner to prevent timing attacks.
-function safeEqual(a: string, b: string) {
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-  return left.length === right.length && timingSafeEqual(left, right);
 }

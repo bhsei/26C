@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { settleUnavailableOrders } from "@/lib/order-lifecycle";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const expected = process.env.CRON_SECRET;
+  if (!expected || request.headers.get("x-cron-secret") !== expected) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  await settleUnavailableOrders();
   const now = new Date();
   const tenMinsFromNow = new Date(now.getTime() + 10 * 60 * 1000);
   const thirtyMinsFromNow = new Date(now.getTime() + 30 * 60 * 1000);

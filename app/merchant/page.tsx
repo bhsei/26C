@@ -3,6 +3,7 @@ import { confirmPickup, createListing, withdrawListing } from "@/app/actions";
 import { requireRole } from "@/lib/auth";
 import DashboardShell from "@/app/components/DashboardShell";
 import FoodImageMatcher from "@/app/components/FoodImageMatcher";
+import VoiceListingAssistant from "@/app/components/VoiceListingAssistant";
 import { settleUnavailableOrders } from "@/lib/order-lifecycle";
 import type { ListingStatus, OrderStatus } from "../generated/prisma/client";
 
@@ -66,14 +67,15 @@ export default async function MerchantPage() {
               ))}
             </select>
           </label>
-          <input name="quantityTotal" type="number" min="1" placeholder="Quantity available" required className="rounded-lg border border-blue-200 bg-white p-2" />
-          <input name="originalPriceCents" type="number" min="1" placeholder="Regular price (cents)" required className="rounded-lg border border-blue-200 bg-white p-2" />
-          <label className="grid gap-1 text-sm text-blue-800">Discount (%)<input name="discountRate" type="number" min="0" max="100" defaultValue="60" required className="rounded-lg border border-blue-200 bg-white p-2 text-blue-950" /></label>
+          <input id="quantityTotal" name="quantityTotal" type="number" min="1" placeholder="Quantity available" required className="rounded-lg border border-blue-200 bg-white p-2" />
+          <input id="originalPriceCents" name="originalPriceCents" type="number" min="1" placeholder="Regular price (cents)" required className="rounded-lg border border-blue-200 bg-white p-2" />
+          <label className="grid gap-1 text-sm text-blue-800">Discount (%)<input id="discountRate" name="discountRate" type="number" min="0" max="100" required className="rounded-lg border border-blue-200 bg-white p-2 text-blue-950" /></label>
           <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
             <label className="grid gap-1 text-sm text-blue-800">
               Pickup starts
               <input
                 name="pickupWindowStart"
+                id="pickupWindowStart"
                 type="datetime-local"
                 required
                 className="rounded-lg border border-blue-200 bg-white p-2 text-blue-950"
@@ -83,6 +85,7 @@ export default async function MerchantPage() {
               Pickup ends
               <input
                 name="pickupWindowEnd"
+                id="pickupWindowEnd"
                 type="datetime-local"
                 required
                 className="rounded-lg border border-blue-200 bg-white p-2 text-blue-950"
@@ -92,7 +95,7 @@ export default async function MerchantPage() {
           <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 sm:col-span-2">Publish closing bag</button>
         </form>
       </div>
-      <FoodImageMatcher />
+      <div className="space-y-4"><FoodImageMatcher /><VoiceListingAssistant /></div>
       </section>
       
       <section className="space-y-4"><h2 className="font-semibold text-blue-900">Listings and orders</h2>
@@ -103,7 +106,7 @@ export default async function MerchantPage() {
             {listing.food.description && <p className="text-sm text-blue-800">{listing.food.description}</p>}
             {listing.food.allergens.length > 0 && <p className="text-xs text-blue-600">Contains: {listing.food.allergens.join(", ")}</p>}
           </div><div className="listing-actions"><span className={`listing-status listing-status-${listing.status.toLowerCase()}`}>{listingStatusLabel[listing.status]}</span>{["ACTIVE", "SOLD_OUT"].includes(listing.status) && listing.pickupWindowEnd > new Date() && <form action={withdrawListing}><input type="hidden" name="listingId" value={listing.id} /><button type="submit" className="withdraw-button">Withdraw listing</button></form>}</div></div>
-          {listing.orders.length > 0 && <div className="border-t border-blue-100 pt-3"><h4 className="mb-2 text-sm font-semibold">Order status</h4><ul className="space-y-2 text-sm">{listing.orders.map((order) => { const canConfirm = order.status === "RESERVED" && !["EXPIRED", "WITHDRAWN"].includes(listing.status) && listing.pickupWindowEnd > new Date(); return <li key={order.id} className="merchant-order-row"><div><span className="merchant-order-status">{orderStatusLabel[order.status]}</span><span className="merchant-order-price"> · {money(order.finalPriceCents * order.quantity)}</span>{order.refundedAt && <p className="refund-note">Simulated refund recorded: {money(order.refundAmountCents ?? 0)}.</p>}{order.status === "EXPIRED" && !order.refundedAt && <p className="refund-note">Expired before payment; no charge was made.</p>}{order.status === "CANCELLED" && !order.refundedAt && <p className="refund-note">Canceled before payment; no charge was made.</p>}</div>{order.pickupCode && <span className="font-mono">{order.pickupCode}</span>}{canConfirm && <form action={confirmPickup}><input type="hidden" name="orderId" value={order.id} /><button type="submit" className="confirm-pickup-button">Confirm pickup</button></form>}</li>; })}</ul></div>}
+            {listing.orders.length > 0 && <div className="border-t border-blue-100 pt-3"><h4 className="mb-2 text-sm font-semibold">Order status</h4><ul className="space-y-2 text-sm">{listing.orders.map((order) => { const canConfirm = order.status === "RESERVED" && !["EXPIRED", "WITHDRAWN"].includes(listing.status) && listing.pickupWindowEnd > new Date(); return <li key={order.id} className="merchant-order-row"><div><span className="merchant-order-status">{orderStatusLabel[order.status]}</span><span className="merchant-order-price"> · {money(order.finalPriceCents * order.quantity)}</span>{order.refundedAt && <p className="refund-note">Simulated refund recorded: {money(order.refundAmountCents ?? 0)}.</p>}{order.status === "EXPIRED" && !order.refundedAt && <p className="refund-note">Expired before payment; no charge was made.</p>}{order.status === "CANCELLED" && !order.refundedAt && <p className="refund-note">Canceled before payment; no charge was made.</p>}</div>{order.pickupCode && <span className="font-mono">{order.pickupCode}</span>}{canConfirm && <form action={confirmPickup}><input type="hidden" name="orderId" value={order.id} /><label className="sr-only" htmlFor={`pickup-${order.id}`}>Enter the student&apos;s pickup code</label><input id={`pickup-${order.id}`} name="pickupCode" required placeholder="Enter pickup code" autoComplete="off" className="rounded border p-2 font-mono" /><button type="submit" className="confirm-pickup-button">Confirm pickup</button></form>}</li>; })}</ul></div>}
         </article>)}
       </section>
     </div>

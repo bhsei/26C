@@ -1,7 +1,7 @@
 # Software Requirements Specification
 ## For SecondHelping
 
-Version 1.1
+Version 1.3
 
 Prepared by Bianca Zavadisk, Geming Wu, Gabriel Silva, Marwen Jadlaoui and Zamo Rzgar
 
@@ -44,6 +44,8 @@ Beihang University · Software Engineering · Team: The Debuggers
 | AI meal image matching | 2026/10/26 | Documented staff member photo-to-food selection, local vision-model configuration, fallback, and partial REQ-FUNC-011 implementation | 0.5 |
 | Peer-review baseline | 2026/10/27 | Corrected requirement statuses and acceptance criteria to match the verified implementation (notably REQ-FUNC-002 and REQ-FUNC-003), added notification and payment-lifecycle requirements (REQ-FUNC-016, REQ-FUNC-017), added a requirements summary table and a verification traceability table, and documented known prototype limitations | 1.0 |
 | Requirement decomposition | 2026/10/28 | Expanded the catalog from 17 to 25 functional requirements by splitting composite requirements into atomic ones (login/session, publication/withdrawal, browsing/filtering, payment/settlement, code generation/confirmation, dashboard/impact report, notifications/reminders) and adding guest browsing; reordered requirements so implemented features precede the future roadmap | 1.1 |
+| Peer review remediation | 2026/11/08 | Clarified lifecycle rules, security and privacy constraints, pricing, reminders, allergen behavior, measurable quality targets, verification status, roadmap priority, and design references; aligned implemented fixes with the prototype | 1.2 |
+| Voice listing input | 2026/11/08 | Extended REQ-FUNC-020 with local voice capture, speech transcription, and selective extraction of explicitly spoken listing fields; updated setup and verification guidance | 1.3 |
 
 ## 1. Introduction
 SecondHelping is a campus food-recovery and food-circulation application designed to reduce surplus food waste while helping students access low-cost meals before dining halls close. The current prototype is a reactive marketplace in which staff members post closing-bag listings and students reserve remaining meals. It includes a simulated payment and refund lifecycle, in-app notifications with timed pickup reminders, a conversational AI assistant that answers questions over live marketplace data, and image-based meal recognition for staff members. The future product direction extends the system from a simple rescue marketplace into an autonomous campus food-circulation network that predicts surplus before it happens, prevents avoidable waste, routes remaining food to its next best use, and measures environmental and social impact.
@@ -72,7 +74,7 @@ The in-scope features for the near term are: student and staff member user accou
 | Pickup Code | A unique code that supports meal validation when a reservation is picked up. |
 | SRS | Software Requirements Specification. |
 | Student | A user role that browses available meals, reserves food, and collects pickup codes. |
-| Staff Member | A user role responsible for listing meals, confirming pickup, and monitoring operations. |
+| Staff Member | A user role responsible for listing meals, confirming pickup, and monitoring operations; stored as `SUPERVISOR` in the current database. |
 | Tool Calling | The pattern in which the assistant invokes bounded server-side functions to read live system data. |
 | UI | User Interface. |
 | VLM | Vision-Language Model for image-based meal or inventory recognition. |
@@ -195,7 +197,7 @@ The application shall integrate with the following technical interfaces:
 
 ### 3.2 Functional Requirements
 
-The catalog contains **25 functional requirements**: REQ-FUNC-001 through REQ-FUNC-020 describe the current prototype (19 implemented, 1 partially implemented), and REQ-FUNC-021 through REQ-FUNC-025 describe the planned future system. Priorities follow the MoSCoW scheme (Must have, Should have, Could have). Status values: **Implemented** (available and verified in the current prototype), **Partially implemented** (a working subset is available), **Planned** (future roadmap only).
+The catalog contains **25 functional requirements**: REQ-FUNC-001 through REQ-FUNC-020 describe the current prototype and REQ-FUNC-021 through REQ-FUNC-025 describe the planned future system. Priority ranks importance within the roadmap; status independently indicates delivery phase. Implemented requirements without recorded verification evidence are treated as **Implemented (verification pending)** until the evidence table is completed. The current repository has no automated test suite, so implementation status alone is not evidence of verification.
 
 | ID | Title | Priority | Status |
 |----|-------|----------|--------|
@@ -218,7 +220,7 @@ The catalog contains **25 functional requirements**: REQ-FUNC-001 through REQ-FU
 | REQ-FUNC-017 | In-app notifications | Should have | Implemented |
 | REQ-FUNC-018 | Timed pickup reminders | Should have | Implemented |
 | REQ-FUNC-019 | Conversational marketplace assistant | Should have | Implemented |
-| REQ-FUNC-020 | Multimodal listing assistant | Should have | Partially implemented |
+| REQ-FUNC-020 | Multimodal listing assistant | Should have | Implemented (verification pending) |
 | REQ-FUNC-021 | Predictive surplus engine | Should have | Planned |
 | REQ-FUNC-022 | Prep copilot and digital twin | Could have | Planned |
 | REQ-FUNC-023 | Dynamic pricing agent | Could have | Planned |
@@ -378,10 +380,11 @@ Listing publication allows dining-hall staff members to make surplus food availa
 
 1. The system accepts a listing when all required fields contain valid values.
 2. The system rejects non-positive quantities or prices, discounts outside 0–100%, and pickup windows that start in the past or end before they start.
-3. A successfully published listing is stored in the database and becomes visible to eligible students.
-4. Only authorized staff members can create or modify listings for their assigned dining hall.
-5. A listing that has not been published is not displayed as an active offer.
-6. A duplicate active listing for the same food at the same dining hall is rejected.
+3. The entered price is the original price in cents. Final meal price is `round(originalPrice × (100 − discountRate) / 100)` to the nearest cent. Each order adds fixed ¥0.25 platform and ¥0.25 service fees, shown on the simulated payment page; both fees are refunded on withdrawal or expiry. No fee recipient is defined while payments are simulated.
+4. A successfully published listing is stored in the database and becomes visible to eligible students.
+5. Only authorized staff members can create or modify listings for their assigned dining hall.
+6. A listing that has not been published is not displayed as an active offer.
+7. A duplicate active listing for the same food at the same dining hall is rejected.
 
 **Verification Method:** Demonstration and form-validation tests.
 
@@ -461,7 +464,7 @@ Filtering helps students find relevant meal offers and make more informed choice
 1. The system displays active listings that are available for reservation.
 2. Students can filter listings by dining hall.
 3. Students can exclude listings containing allergens selected in their preferences.
-4. Listings with unknown or incomplete allergen information are not represented as confirmed safe for a student's declared allergen restrictions.
+4. When any allergen exclusion is active, listings with no recorded allergen values are hidden. Listing cards label missing data as “Allergen information not provided” and direct severe-allergy users to staff.
 5. The system updates the displayed results when filters are changed, and filters can be cleared to restore the full list.
 
 **Verification Method:** Demonstration and filter tests against known catalog data.
@@ -481,9 +484,9 @@ Reservation management allows students to claim available meals while preventing
 
 **Preconditions:**
 
-- The user is authenticated.
+- The user is authenticated with the Student role.
 - The listing exists and is active.
-- The requested quantity is valid and available.
+- One unit is available; each order is exactly one unit.
 
 **Acceptance Criteria:**
 
@@ -494,8 +497,11 @@ Reservation management allows students to claim available meals while preventing
 5. A sold-out or expired listing cannot be reserved.
 6. The student is redirected to the simulated payment page for the new order.
 7. The last available unit is marked SOLD_OUT on the listing when inventory reaches zero.
+8. Staff Member accounts cannot reserve listings.
+9. A pending payment holds one unit for 10 minutes. On expiry, the order becomes EXPIRED and the unit returns to inventory; a SOLD_OUT listing returns to ACTIVE.
+10. At most two open orders (PENDING_PAYMENT or RESERVED) per student per listing are permitted.
 
-**Verification Method:** Demonstration and integration tests, including concurrent reservation tests.
+**Verification Method:** Demonstration and integration tests, including concurrent reservation tests. No automated test evidence is currently recorded; verification is pending.
 
 #### REQ-FUNC-011 — Simulated Payment
 
@@ -521,6 +527,7 @@ A realistic payment step makes the reservation flow complete and testable while 
 3. Confirming payment is atomic and idempotent: only a PENDING_PAYMENT order transitions to RESERVED, exactly once, even if the action is repeated.
 4. A user can only confirm payment for their own order, and payment cannot be confirmed after the pickup window has ended or the listing has been withdrawn.
 5. Paid orders record the payment timestamp (`paidAt`) and receive a pickup code as defined in REQ-FUNC-013.
+6. Payment succeeds only if the order remains PENDING_PAYMENT and its creation time is within the 10-minute hold; a late payment is rejected.
 
 **Verification Method:** Demonstration of the payment flow and repeated-confirmation checks.
 
@@ -548,7 +555,9 @@ Automatic settlement keeps order and listing states consistent over time and gua
 2. When a staff member withdraws a listing, affected RESERVED orders are marked CANCELLED and refunded in full in the same way.
 3. Orders that were never paid expire without any refund record.
 4. Settlement is safe to run repeatedly and concurrently: conditional updates ensure each order is settled at most once.
-5. Settlement runs automatically when relevant pages or actions are used, so expiry does not depend on a specific user visiting a specific page.
+5. Settlement runs on the one-minute scheduler and on relevant pages/actions, and processes due work within 2 minutes while the scheduler is running.
+6. Expiry of an unpaid payment hold releases its stock exactly once.
+7. Paid orders that are not collected by the pickup-window end are currently marked EXPIRED and fully refunded. A separate NO_SHOW state and distinct no-show refund policy require a product decision and are not implemented.
 
 **Verification Method:** Settlement tests for expiry, withdrawal, and repeated settlement runs.
 
@@ -580,7 +589,7 @@ The pickup code is the shared secret that links a student's reservation to a phy
 
 #### REQ-FUNC-014 — Pickup Confirmation
 
-**Status:** Implemented (code-based confirmation in the dashboard; camera QR scanning is a future extension)
+**Status:** Implemented (verification pending; staff must enter the pickup code; camera QR scanning is a future extension)
 
 **Priority:** Must have
 
@@ -601,10 +610,11 @@ Pickup confirmation provides a reliable way to verify meal collection and distin
 **Acceptance Criteria:**
 
 1. A staff member can confirm pickup for an eligible order belonging to their own dining hall.
-2. An order belonging to another dining hall, an expired order, or an order outside its pickup window cannot be confirmed.
+2. The submitted code must match the order. A wrong code, code from another dining hall, used code, expired order, or order outside its pickup window cannot be confirmed.
 3. A successfully confirmed order is marked as PICKED_UP and its pickup timestamp is recorded.
 4. A completed pickup cannot be confirmed a second time.
 5. The student receives a pickup confirmation notification with the pickup time, as defined in REQ-FUNC-017.
+6. Conditional transition from RESERVED ensures concurrent pickup and settlement, and repeated pickup requests, produce at most one successful pickup and notification.
 
 **Verification Method:** Demonstration and integration tests across dining halls and order states.
 
@@ -630,7 +640,7 @@ Operational reporting helps staff members monitor food recovery activities and u
 
 1. The dashboard displays aggregate metrics calculated from recorded system data.
 2. Completed pickups are distinguished from pending, cancelled, expired, and uncollected reservations; only PICKED_UP orders count toward rescued-meal metrics.
-3. Student savings are calculated from the difference between original and discounted prices of picked-up orders.
+3. Student savings are calculated as Σ((original price − final meal price) × quantity) over PICKED_UP orders; the dashboard period is called “this term” and includes orders created since the first day of the month four months before the current month.
 4. The displayed totals are consistent with the underlying records for the selected reporting period.
 5. Users cannot access reports outside their authorized scope.
 
@@ -656,7 +666,7 @@ Impact reporting demonstrates the value of the marketplace to dining halls and p
 
 **Acceptance Criteria:**
 
-1. The report shows the number of rescued meals, student savings, and recovered value for the staff member's dining hall, calculated from PICKED_UP orders.
+1. The report covers the most recent seven days for the staff member's own dining hall and shows rescued meals, student savings, and recovered value calculated from PICKED_UP orders. Student savings = Σ((original price − final meal price) × quantity); recovered value = Σ(final meal price × quantity).
 2. The report includes a day-by-day view of rescued meals for the most recent seven-day period.
 3. Refunded, expired, and cancelled orders do not count toward impact metrics.
 4. The report is restricted to staff members and scoped to their own dining hall; students cannot access it.
@@ -698,7 +708,7 @@ Lifecycle notifications keep both students and staff members informed of reserva
 
 **Statement:**
 
-The system shall generate timed reminder notifications for students with paid reservations when their pickup window is about to open, is open, and is about to close. Each reminder shall be generated at most once per order.
+The system shall generate at most two timed reminders per paid reservation: one opening reminder (either “opens in 10 minutes” or “open now”) and one closing reminder.
 
 **Rationale:**
 
@@ -711,9 +721,9 @@ Timed reminders reduce missed pickups and the resulting food waste and refunds.
 
 **Acceptance Criteria:**
 
-1. A reminder is generated when a pickup window opens in approximately ten minutes, when the window is currently open, and when it closes in approximately thirty minutes.
+1. The opening reminder is sent within ±1 minute of the ten-minute pre-opening time, or immediately as “open now” when payment is confirmed after opening; these alternatives share `reminderOpenSent`. The closing reminder is sent within ±1 minute of 30 minutes before the window ends using `reminderCloseSent`.
 2. Reminders include the food name and the order's pickup code.
-3. Per-order reminder flags (`reminderOpenSent`, `reminderCloseSent`) ensure each timed reminder is sent at most once, even when the scheduler runs repeatedly.
+3. The two per-order reminder flags ensure each reminder is sent at most once, even when the scheduler runs repeatedly. Windows shorter than 30 minutes can receive the closing reminder soon after the opening reminder.
 4. Reminders are only generated for orders still in RESERVED status; picked-up, expired, or cancelled orders receive no further reminders.
 5. The scheduler invokes the reminder sweep automatically every minute without user interaction.
 
@@ -742,7 +752,7 @@ A conversational interface lowers the effort needed to find suitable meals, chec
 1. Unauthenticated requests to the assistant endpoint are rejected (HTTP 401).
 2. Questions about available meals, dining halls, or pickup windows are answered from live database records through the defined tools, not from model memory.
 3. The assistant only exposes the signed-in user's own orders, and reveals pickup codes only for orders in RESERVED status.
-4. Allergen-related questions exclude meals containing the stated allergens.
+4. Allergen exclusion is applied by a database query over catalog data; the model only supplies filter names. Unsupported allergen names are reported to the user, never silently ignored. The assistant must not describe a meal as safe and must advise the user to check listing information with staff.
 5. Small talk and general questions are answered briefly without invoking data tools.
 6. The assistant cannot create, pay for, cancel, or modify orders; it directs users to the app controls instead.
 7. If the Ollama server is unreachable, the interface reports the assistant as unavailable and the rest of the application continues to function.
@@ -751,23 +761,24 @@ A conversational interface lowers the effort needed to find suitable meals, chec
 
 #### REQ-FUNC-020 — Multimodal Listing Assistant
 
-**Status:** Partially implemented (image-based food selection is implemented; voice input and generation of other listing fields remain planned)
+**Status:** Implemented (verification pending; image matching and voice-based field extraction are available, with evaluation evidence pending)
 
 **Priority:** Should have
 
 **Statement:**
 
-The system shall allow an authorized staff member to upload a meal image and receive a suggestion for an existing Food catalog item in the listing form. Future extensions may support voice input and suggestions for additional listing fields.
+The system shall allow an authorized staff member to use a meal image or a short voice recording to prepare a listing form. Image input suggests an existing Food catalog item. Voice input is transcribed locally and may populate the selected food, quantity, original price, discount, and pickup-window times when those values are clearly spoken. Listing publication always remains a separate staff action.
 
 **Rationale:**
 
-Image-based catalog matching can reduce manual dish selection while keeping the staff member in control of listing details and publication.
+Image and voice input can reduce repetitive entry while keeping the staff member in control of the resulting values and publication.
 
 **Preconditions:**
 
 - An authorized staff member is authenticated.
 - A supported image and an existing Food catalog are available.
-- The local Ollama vision model and Python matcher are available.
+- For image input, the local Ollama vision model and Python matcher are available.
+- For voice input, microphone permission and the local Ollama speech-recognition and text models are available.
 
 **Acceptance Criteria:**
 
@@ -778,8 +789,15 @@ Image-based catalog matching can reduce manual dish selection while keeping the 
 5. Image processing does not set price, discount, quantity, or pickup information and does not publish a listing.
 6. If processing fails or no match is returned, manual food selection and listing creation remain available.
 7. Uploaded images and generated catalog files are removed from temporary storage after processing.
+8. The staff member can record up to 60 seconds of speech describing one listing; the browser converts the recording to WAV and sends it to the authenticated server endpoint.
+9. Voice audio is transcribed and interpreted using local Ollama models. Neither audio nor transcript is persisted by the application or sent to an external AI service.
+10. Only explicitly stated, unambiguous values are extracted: catalog food, whole-number quantity, original price, discount percentage, pickup start, and pickup end. Relative date/time phrases are resolved only when unambiguous against the current server time.
+11. A food suggestion must resolve to an exact existing Food catalog ID. The system must not create catalog entries or infer omitted values.
+12. Each non-null extracted value fills only its corresponding form field. Null, omitted, uncertain, or invalid values leave the current form field unchanged, preserving any value entered manually or supplied by image matching.
+13. The recognized transcript and populated form are shown for staff review. Staff may correct every field and must submit the form separately to publish.
+14. If microphone access, local transcription, or extraction is unavailable, the staff member can continue with the existing manual form or image matcher.
 
-**Verification Method:** Demonstration, authenticated endpoint checks, upload format and size checks, manual fallback checks, and evaluation against labeled meal photos.
+**Verification Method:** Demonstration, authenticated endpoint checks, image format and size checks, voice duration and WAV-format checks, exact catalog-ID validation, extraction cases for explicitly stated and omitted fields, preservation of manually entered fields, manual fallback checks, and evaluation against labeled meal photos and voice recordings. Results are pending entry in §4.1.
 
 #### REQ-FUNC-021 — Predictive Surplus Engine
 
@@ -935,19 +953,65 @@ Impact estimates can help students and campus operators understand the potential
 
 ### 3.3 Quality of Service
 #### 3.3.1 Performance
-The current prototype shall support normal browsing, reservation, and confirmation operations within acceptable campus-scale response times. Chat assistant and image-matching responses may take longer because they depend on locally hosted models, but they shall not block marketplace operations. For future AI features, prediction and optimization tasks shall be available within a practical operational window (for example, within the time between meal planning and service start) without blocking critical user interactions.
+The following are target requirements, not measured results. Until measurements are recorded in §4.1, their status is verification pending.
+
+| ID | Requirement | Verification target |
+|---|---|---|
+| REQ-NFR-01 | Marketplace browse, reserve, simulated payment, and pickup actions shall respond at p95 ≤ 1.0 s under 20 concurrent users on the reference local setup. | Timed workload against 50 listings, 500 orders, and 200 users. |
+| REQ-NFR-02 | Chat requests shall return a complete response at p95 ≤ 15 s and time out within 60 s with an unavailable message. | Timed representative chat evaluation. |
+| REQ-NFR-03 | Image matching shall return at p95 ≤ 20 s and time out within 60 s with manual catalog selection available. | Timed labeled image set. |
+| REQ-NFR-04 | Settlement and reminder processing shall complete within 2 minutes of their due time while the scheduler is running. | Timestamped idle-system scenario and scheduler logs. |
 
 #### 3.3.2 Security
-The application shall enforce authenticated sessions and role-based access. Passwords shall be hashed with scrypt, and session tokens shall be stored only as hashes. The conversational assistant endpoint shall require an authenticated session and shall only expose the signed-in user's own order data. The image-matching endpoint shall require the SUPERVISOR role and shall validate uploaded files by type, size, and signature. Notification queries and mutations shall be scoped to the signed-in user. Future AI components shall ensure that pricing and routing suggestions are not based on sensitive student data beyond what is required for operational fairness and service quality.
+The application shall enforce authenticated sessions and role-based access. Passwords shall be stored only as scrypt hashes. Before deployment, operators shall run `pnpm db:migrate-passwords`; verification shall confirm zero stored passwords without the `scrypt$` prefix. New seed accounts shall also use scrypt. Login rejects any non-scrypt stored value. The reminder endpoint requires the `x-cron-secret` header to match `CRON_SECRET`. The conversational assistant shall expose only the signed-in user's order data. The image-matching endpoint shall require the Staff Member role and validate uploaded files by type, size, and signature. Notification queries and mutations shall be scoped to the signed-in user. Login rate limiting remains an open implementation requirement and must be completed before non-local deployment.
 
 #### 3.3.3 Reliability
-The system shall maintain consistent inventory and order status by using transactional database updates. Payment confirmation and order settlement shall be idempotent so that retries or concurrent requests cannot produce duplicate transitions or refunds. The chat assistant shall operate in read-only fashion and shall fail gracefully, leaving marketplace functionality unaffected, when the local model server is unavailable. Future AI services shall be accompanied by fallback logic so that if forecasting or pricing recommendations are unavailable, the system can revert to a safe default mode without losing core marketplace functionality.
+The system shall maintain consistent inventory and order status by using conditional database updates. Payment holds last 10 minutes; expired unpaid orders release one unit of stock and a SOLD_OUT listing returns to ACTIVE. Payment succeeds only while the order remains PENDING_PAYMENT and within its hold. Pickup requires a matching code and only one RESERVED-to-PICKED_UP transition may succeed. Settlement runs from the one-minute local scheduler as well as on application requests. Paid orders that reach the end of their pickup window currently receive a full simulated refund and enter EXPIRED; listing withdrawal refunds paid orders and marks them CANCELLED. A separate NO_SHOW state and distinct no-show refund policy are deferred pending an approved product decision. The chat assistant is read-only and must fail gracefully without blocking marketplace features when Ollama is unavailable.
+
+Order lifecycle overview (current behavior):
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING_PAYMENT: reserve / stock held
+    PENDING_PAYMENT --> RESERVED: payment confirmed within 10 min
+    PENDING_PAYMENT --> EXPIRED: hold expires / stock released
+    PENDING_PAYMENT --> CANCELLED: listing withdrawn
+    RESERVED --> PICKED_UP: staff enters matching code in window
+    RESERVED --> EXPIRED: pickup window ends / full simulated refund
+    RESERVED --> CANCELLED: listing withdrawn / full simulated refund
+    PICKED_UP --> [*]
+    EXPIRED --> [*]
+    CANCELLED --> [*]
+```
 
 #### 3.3.4 Availability
-The current platform shall be available during expected operating periods. For AI features, the product shall support degraded operation so that listing creation, reservations, and pickup confirmation remain functional even when predictive services are temporarily unavailable.
+| ID | Requirement | Verification target |
+|---|---|---|
+| REQ-NFR-05 | Core marketplace workflows shall remain usable when Ollama is unavailable. | Disable Ollama and complete listing, reservation, payment, and pickup workflows. |
+| REQ-NFR-06 | The interface shall support current Chrome, Edge, Firefox, and Safari, keyboard navigation, and programmatic labels for form fields. | Browser spot checks and keyboard-only review. |
+| REQ-NFR-07 | The local reference environment shall provide at least 16 GB RAM; CPU-only inference is supported with no guaranteed AI latency. Ollama is a separate persistent service hosting `qwen2:7b` and `qwen2.5vl:3b`. | Record host configuration and verify degraded behavior when models are unavailable. |
+| REQ-NFR-08 | The service shall target 99% availability during dining-hall operating hours, excluding planned maintenance. | Measure uptime across a one-week operating-period window; evidence pending. |
 
 ### 3.4 Compliance
-The system shall handle student and staff account data responsibly. It must store only the minimum user information necessary for authentication, authorization, and service delivery. Chat assistant conversations and meal images are processed entirely on locally hosted models, are not sent to external AI services, and are not persisted by the application; uploaded images are deleted from temporary storage after processing. Any future AI features must consider privacy, fairness, and explainability requirements before making pricing or redistribution decisions that affect community members.
+The system shall handle student and staff account data in accordance with the Personal Information Protection Law of the PRC (PIPL). Stored personal data are name (display), email (login/contact), role (authorization), dining hall (staff scope), orders (reservation and settlement), notifications (service messages), and sessions (authentication). Chat messages and uploaded meal images are processed locally and are not persisted by the application; temporary image files are deleted after processing. Account deletion and retention periods are not currently implemented and are release requirements to resolve before production use; proposed targets are sessions 7 days, notifications 90 days, and orders 1 year. Dining-hall operators own food-safety and allergen rules. Listing pages must direct users with severe allergies to verify information with staff; catalog data are operator-provided and are not a safety guarantee.
+
+Use-case participants are Guest, Student, Staff Member, and the local scheduler. Guests browse the public overview; Students browse/filter, reserve, pay, view pickup codes, and receive reminders; Staff Members publish/withdraw listings, confirm pickups, and view reports; the scheduler settles due orders and sends reminders. Detailed sequence and class diagrams belong in a design document.
+
+```mermaid
+flowchart LR
+    G[Guest] --> B[Browse overview]
+    S[Student] --> L[Sign in]
+    S --> F[Browse and filter meals]
+    S --> R[Reserve and pay]
+    S --> C[View pickup code]
+    S --> N[Receive notifications]
+    M[Staff Member] --> L
+    M --> P[Publish or withdraw listing]
+    M --> U[Confirm pickup with code]
+    M --> D[View dashboard and impact report]
+    T[Local scheduler] --> X[Settle expired orders]
+    T --> N
+```
 
 ### 3.5 Design and Implementation
 The system shall continue to use a layered architecture with clear separation between user interface, service logic, and persistence. The current data model includes User, DiningHall, Food, Listing, Order, Notification, and AuthSession; future AI features can extend this model with prediction outputs, pricing policies, routing records, and impact metrics.
@@ -966,12 +1030,14 @@ Two AI components are operational in the current prototype, both running on loca
    - Answers questions over live data through read-only tool calling (listings, dining halls, own orders, current time).
    - Handles general questions and small talk without tools; fails gracefully when the model server is unavailable.
 
-2. Multimodal Listing Copilot (REQ-FUNC-020, partially implemented)
+2. Multimodal Listing Copilot (REQ-FUNC-020; image and voice-assisted form population available, model evaluation pending)
    - Accepts meal photos and suggests an existing Food catalog item in the staff member listing form, using constrained JSON output and catalog-ID validation.
    - The staff member confirms the food and enters listing details manually; image processing does not set price or discount and does not publish the listing.
    - Voice input and automated suggestions for descriptions, pricing, or pickup information remain future extensions.
 
 These components demonstrate the privacy-preserving, locally hosted approach that the future modules will follow. The future product direction adds the following AI modules:
+
+AI acceptance targets for the current locally hosted features (not yet measured): the chat evaluation set shall contain 40 questions across live listings, own orders, pickup codes, allergens, time, small talk, prompt injection, cross-user data requests, and prohibited order changes; run each three times. Allergen filtering and privacy cases require 100% correct outcomes, and other answers require at least 90% correctness. The image matcher shall be measured on labeled images in `docs/sample_food_images/` plus 20 additional labeled images, with ≥80% top-1 accuracy and 100% invalid-file rejection. Re-evaluation is required when `OLLAMA_MODEL` or `OLLAMA_VISION_MODEL` changes. The additional 20-image set and recorded evaluation results are not yet present.
 
 1. Predictive Surplus Engine (REQ-FUNC-021)
    - Inputs: POS sales, menu data, recipes, weather, campus events, class schedules, historical waste, day-of-week patterns, exam periods, and holidays.
@@ -1006,40 +1072,54 @@ Verification is performed at two levels: the current prototype and the future AI
 - Routing recommendations shall be checked against destination feasibility and campus operational constraints.
 - Impact calculations shall be validated against transaction data and environmental assumptions.
 
-### 4.1 Verification Traceability for Implemented Requirements
+### 4.1 Verification Traceability for Functional Requirements
 
-| ID | Verification activity | Expected evidence |
-|----|----------------------|-------------------|
-| REQ-FUNC-001 | Sign in with valid and invalid credentials | Correct dashboard after login; generic error on failure |
-| REQ-FUNC-002 | Sign up with valid, malformed, and duplicate inputs | Account created and redirected; clear errors for invalid or duplicate inputs |
-| REQ-FUNC-003 | Request `/merchant` and `/impact` as a student and while signed out | Redirects in both cases; staff member actions rejected for students |
-| REQ-FUNC-004 | Log in, inspect the session record, then log out | Hashed token with expiry in AuthSession; record deleted and cookie cleared on logout |
-| REQ-FUNC-005 | Open `/` signed out and try to reserve | Listings preview visible; reservation attempt leads to login |
-| REQ-FUNC-006 | Publish valid and invalid listings | Valid listing appears for students; invalid inputs rejected |
-| REQ-FUNC-007 | Withdraw an active listing and attempt to reserve it | Listing WITHDRAWN and hidden; paid orders cancelled and refunded |
-| REQ-FUNC-008 | Compare listing cards with database records | Only available listings shown, with complete and accurate details |
-| REQ-FUNC-009 | Filter by hall and exclude allergens | Matching listings only; excluded-allergen meals hidden |
-| REQ-FUNC-010 | Reserve a listing, including the last unit and a sold-out listing | Inventory decrements atomically; SOLD_OUT at zero; no overbooking |
-| REQ-FUNC-011 | Pay for an order and confirm payment twice | Single PENDING_PAYMENT → RESERVED transition; `paidAt` recorded |
-| REQ-FUNC-012 | Expire and withdraw listings; settle twice | Full refunds recorded once; unpaid orders expire without refund |
-| REQ-FUNC-013 | Pay for two orders and inspect the codes | Unique `XXXX-XXXX-XX` codes visible only to the order owner |
-| REQ-FUNC-014 | Confirm pickup as the owning hall and as another hall | PICKED_UP for the owning hall only; no double confirmation |
-| REQ-FUNC-015 | Compare dashboard metrics with database records | Totals reconcile; only PICKED_UP orders counted |
-| REQ-FUNC-016 | Open `/impact` as a staff member and as a student | Seven-day rescued-meal view for own hall; students redirected |
-| REQ-FUNC-017 | Trigger order events and open the notifications panel | Event notifications appear once per event; unread badge and mark-as-read work |
-| REQ-FUNC-018 | Run the reminder sweep twice against controlled pickup windows | Each timed reminder sent exactly once, with food name and pickup code |
-| REQ-FUNC-019 | Ask listing, order, allergen, and time questions with and without a session | Live-data answers for signed-in users; HTTP 401 otherwise |
-| REQ-FUNC-020 | Upload a labeled meal photo and an invalid file | Correct catalog selection; invalid files rejected; manual fallback works |
+| ID | Verification activity | Expected evidence | Test ID | Run date | Result |
+|----|----------------------|-------------------|---------|----------|--------|
+| REQ-FUNC-001 | Sign in with valid and invalid credentials | Correct dashboard after login; generic error on failure | — | — | Verification pending |
+| REQ-FUNC-002 | Sign up with valid, malformed, and duplicate inputs | Account created and redirected; clear errors for invalid or duplicate inputs | — | — | Verification pending |
+| REQ-FUNC-003 | Request `/merchant` and `/impact` as a student and while signed out | Redirects in both cases; staff member actions rejected for students | — | — | Verification pending |
+| REQ-FUNC-004 | Log in, inspect the session record, then log out | Hashed token with expiry in AuthSession; record deleted and cookie cleared on logout | — | — | Verification pending |
+| REQ-FUNC-005 | Open `/` signed out and try to reserve | Listings preview visible; reservation attempt leads to login | — | — | Verification pending |
+| REQ-FUNC-006 | Publish valid and invalid listings | Valid listing appears for students; invalid inputs rejected | — | — | Verification pending |
+| REQ-FUNC-007 | Withdraw an active listing and attempt to reserve it | Listing WITHDRAWN and hidden; paid orders cancelled and refunded | — | — | Verification pending |
+| REQ-FUNC-008 | Compare listing cards with database records | Only available listings shown, with complete and accurate details | — | — | Verification pending |
+| REQ-FUNC-009 | Filter by hall and exclude allergens | Matching listings only; excluded-allergen meals hidden | — | — | Verification pending |
+| REQ-FUNC-010 | Reserve a listing, including the last unit and a sold-out listing | Inventory decrements atomically; SOLD_OUT at zero; no overbooking | — | — | Verification pending |
+| REQ-FUNC-011 | Pay for an order and confirm payment twice | Single PENDING_PAYMENT → RESERVED transition; `paidAt` recorded | — | — | Verification pending |
+| REQ-FUNC-012 | Expire and withdraw listings; settle twice | Full refunds recorded once; unpaid orders expire without refund | — | — | Verification pending |
+| REQ-FUNC-013 | Pay for two orders and inspect the codes | Unique `XXXX-XXXX-XX` codes visible only to the order owner | — | — | Verification pending |
+| REQ-FUNC-014 | Confirm pickup as the owning hall and as another hall | PICKED_UP for the owning hall only; no double confirmation | — | — | Verification pending |
+| REQ-FUNC-015 | Compare dashboard metrics with database records | Totals reconcile; only PICKED_UP orders counted | — | — | Verification pending |
+| REQ-FUNC-016 | Open `/impact` as a staff member and as a student | Seven-day rescued-meal view for own hall; students redirected | — | — | Verification pending |
+| REQ-FUNC-017 | Trigger order events and open the notifications panel | Event notifications appear once per event; unread badge and mark-as-read work | — | — | Verification pending |
+| REQ-FUNC-018 | Run the reminder sweep twice against controlled pickup windows | Each timed reminder sent exactly once, with food name and pickup code | — | — | Verification pending |
+| REQ-FUNC-019 | Ask listing, order, allergen, and time questions with and without a session | Live-data answers for signed-in users; HTTP 401 otherwise | — | — | Verification pending |
+| REQ-FUNC-020 | Upload a labeled meal photo and an invalid file | Correct catalog selection; invalid files rejected; manual fallback works | — | — | Verification pending |
 
-### 4.2 Known Limitations of the Current Prototype
+### 4.2 Non-Functional Verification
+
+| ID | Verification activity | Expected evidence | Test ID | Run date | Result |
+|----|-----------------------|-------------------|---------|----------|--------|
+| REQ-NFR-01 | Measure core workflows under the reference workload | p95 ≤ 1.0 s at 20 concurrent users | — | — | Verification pending |
+| REQ-NFR-02 | Measure chat response and timeout behavior | p95 ≤ 15 s; timeout by 60 s | — | — | Verification pending |
+| REQ-NFR-03 | Measure image matching and fallback | p95 ≤ 20 s; timeout by 60 s | — | — | Verification pending |
+| REQ-NFR-04 | Observe settlement/reminder timing while idle | Due work completed within 2 minutes | — | — | Verification pending |
+| REQ-NFR-05–08 | Test degraded operation, browser/accessibility support, reference setup, and availability | Recorded manual review and uptime results | — | — | Verification pending |
+
+### 4.3 Known Limitations of the Current Prototype
 
 The following limitations are known and accepted for this phase; they are documented here so that reviewers can distinguish design decisions from defects.
 
 - Payments and refunds are simulated; no real money moves and no external payment provider is integrated.
 - Notifications are in-app only; there is no push, SMS, or email channel.
-- The reminder sweep endpoint is intended for invocation by the local scheduler only and currently has no authentication; it must be restricted before any non-local deployment.
+- The reminder endpoint requires `CRON_SECRET`; the scheduler and application must be configured with the same value.
 - Staff Member accounts are provisioned through the seed script or directly in the database, not through self-service signup.
 - Students cannot cancel a reservation themselves; refunds occur only when a listing expires or is withdrawn.
+- Login rate limiting, account deletion, retention enforcement, and backup policy are not implemented and must be resolved before production deployment.
+- Reservation is limited to one unit per order, Student accounts, and two open orders per student per listing.
+- Listing administration, dining-hall management, and staff-account management have no user interface in this phase; the development team maintains these records through seed data or database operations.
+- The system currently uses EXPIRED and a full simulated refund for paid orders that miss their pickup window. A separate NO_SHOW state and a distinct refund policy remain a product decision.
 - Chat assistant answer quality depends on the locally hosted model; small models may occasionally summarize imperfectly even though the underlying data is correct.
 - The meal image matcher only selects from existing catalog foods; it does not create new catalog entries or fill other listing fields.
 
@@ -1058,13 +1138,13 @@ The following limitations are known and accepted for this phase; they are docume
 | `/pay/[ref]` | Simulated payment page for a reservation |
 | `/api/chat` | Authenticated conversational-assistant endpoint |
 | `/api/food-image-match` | Staff-only image-to-food catalog suggestion endpoint |
-| `/api/notifications` | Reminder sweep endpoint invoked by the local scheduler |
+| `/api/notifications` | Secret-protected reminder and settlement endpoint invoked by the local scheduler |
 
 ### Appendix B: Current Data Model Summary
 
 - User: identity, role, dining hall assignment, authentication, and session relationships.
 - DiningHall: dining location and associated staff members/listings.
-- Food: catalog entry with name, description, and allergens; referenced by listings.
+- Food: catalog entry with name, description, and allergens; allergen preferences are page filters only and are not stored on user accounts.
 - Listing: meal offer with price, quantity, discount, and pickup schedule, linked to a Food record.
 - Order: reservation with simulated payment state, refund fields, pickup confirmation state, and per-order reminder flags (`reminderOpenSent`, `reminderCloseSent`).
 - Notification: in-app message addressed to one user, with read/unread state and timestamp.
@@ -1085,6 +1165,7 @@ pnpm prisma migrate deploy
 pnpm prisma generate
 pnpm prisma db seed
 ollama pull qwen2:7b      # local model for the chat assistant
-ollama pull qwen2.5vl:3b  # local vision model for meal photo matching
+   ollama pull qwen2.5vl:3b  # local vision model for meal photo matching
+   ollama pull frozenlab/qwen3-asr:0.6b # local voice transcription for listing input
 pnpm dev                  # starts Next.js and the notification reminder scheduler
 ```

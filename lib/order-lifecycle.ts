@@ -7,6 +7,7 @@ import prisma from "@/lib/prisma";
  * same way. Conditional updates make concurrent page requests safe.
  */
 export async function settleUnavailableOrders(now = new Date()) {
+  const paymentHoldCutoff = new Date(now.getTime() - 10 * 60 * 1000);
   await prisma.listing.updateMany({
     where: {
       status: { in: ["ACTIVE", "SOLD_OUT"] },
@@ -18,18 +19,16 @@ export async function settleUnavailableOrders(now = new Date()) {
   const outstanding = await prisma.order.findMany({
     where: {
       status: { in: ["PENDING_PAYMENT", "RESERVED"] },
-      listing: {
-        is: {
-          OR: [
-            { status: { in: ["EXPIRED", "WITHDRAWN"] } },
-            { pickupWindowEnd: { lte: now } },
-          ],
-        },
-      },
+      OR: [
+        { status: "PENDING_PAYMENT", createdAt: { lte: paymentHoldCutoff } },
+        { listing: { is: { OR: [{ status: { in: ["EXPIRED", "WITHDRAWN"] } }, { pickupWindowEnd: { lte: now } }] } } },
+      ],
     },
     // 1. UPDATED: Fetch the required notification data alongside the financial data
     select: {
       id: true,
+      listingId: true,
+      createdAt: true,
       status: true,
       finalPriceCents: true,
       quantity: true,
@@ -50,21 +49,28 @@ export async function settleUnavailableOrders(now = new Date()) {
   for (const order of outstanding) {
     const paid = order.status === "RESERVED";
     const withdrawn = order.listing.status === "WITHDRAWN";
+    const holdExpired = !paid && !withdrawn && order.createdAt <= paymentHoldCutoff && order.listing.status !== "EXPIRED";
     const refundAmountCents = paid
       ? order.finalPriceCents * order.quantity + order.platformFeeCents + order.serviceFeeCents
       : 0;
 
-    await prisma.order.updateMany({
-      where: { id: order.id, status: order.status },
-      data: {
-        status: withdrawn ? "CANCELLED" : "EXPIRED",
-        refundAmountCents,
-        refundedAt: paid ? now : null,
-        updatedAt: now,
-      },
+    const transitioned = await prisma.$transaction(async (tx) => {
+      const result = await tx.order.updateMany({
+        where: { id: order.id, status: order.status, ...(holdExpired ? { createdAt: { lte: paymentHoldCutoff } } : {}) },
+        data: { status: withdrawn ? "CANCELLED" : "EXPIRED", refundAmountCents, refundedAt: paid ? now : null, updatedAt: now },
+      });
+      if (result.count !== 1) return false;
+      if (holdExpired) {
+        await tx.listing.updateMany({
+          where: { id: order.listingId, status: { in: ["ACTIVE", "SOLD_OUT"] } },
+          data: { quantityRemaining: { increment: order.quantity }, status: "ACTIVE", updatedAt: now },
+        });
+      }
+      return true;
     });
+    if (!transitioned) continue;
 
-    // 2. NEW: Generate and dispatch notifications if it was a confirmed reservation
+    // Notify only after the conditional transition succeeds.
     if (paid) {
       const notifications = [];
       const foodName = order.listing.food.name;

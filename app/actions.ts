@@ -10,6 +10,7 @@ import { sendOrderPlacedNotifications } from "@/lib/notifications";
 
 const PLATFORM_FEE_CENTS = 25;
 const SERVICE_FEE_CENTS = 25;
+const PAYMENT_HOLD_MS = 10 * 60 * 1000;
 
 // A supervisor can publish a listing for their dining hall, which students can then claim.
 export async function createListing(formData: FormData) {
@@ -73,16 +74,18 @@ export async function createListing(formData: FormData) {
 
 // A student can claim a listing, which creates an order for that student and decrements the quantity remaining of the listing.
 export async function claimListing(formData: FormData) {
-  // Although the naming student is used here, actually, supervisors can also claim listings
-  const user = await getCurrentUser();
-  if (!user) {
-    //throw new Error("Not authenticated");
-    redirect("/login");
-  }
+  const user = await requireRole("STUDENT");
   const listingId = String(formData.get("listingId") ?? "");
   if (!listingId) return;
+  const now = new Date();
+  await settleUnavailableOrders(now);
 
   const order = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "Listing" WHERE "id" = ${listingId} FOR UPDATE`;
+    const openOrderCount = await tx.order.count({
+      where: { studentId: user.id, listingId, status: { in: ["PENDING_PAYMENT", "RESERVED"] } },
+    });
+    if (openOrderCount >= 2) return null;
     // 1. UPDATED: Include food and supervisor relations so we can send the notification
     const listing = await tx.listing.findFirst({
       where: {
@@ -172,12 +175,14 @@ export async function confirmPickup(formData: FormData) {
   await settleUnavailableOrders(now);
   
   const orderId = String(formData.get("orderId") ?? "");
-  if (!orderId) return;
+  const pickupCode = String(formData.get("pickupCode") ?? "").trim().toUpperCase();
+  if (!orderId || !pickupCode) return;
 
   // 1. Find the order first so we know who to notify and what the food is
   const order = await prisma.order.findFirst({
     where: {
       id: orderId,
+      pickupCode,
       status: "RESERVED",
       listing: { 
         is: { 
@@ -197,10 +202,11 @@ export async function confirmPickup(formData: FormData) {
   if (!order) return; // Order not found or not eligible for pickup
 
   // 2. Update the order status
-  await prisma.order.update({
-    where: { id: order.id },
+  const transitioned = await prisma.order.updateMany({
+    where: { id: order.id, status: "RESERVED", pickupCode, pickupWindowEnd: { gt: now } },
     data: { status: "PICKED_UP", pickedUpAt: now },
   });
+  if (transitioned.count !== 1) return;
 
   // 3. Format the time (e.g., "02:30 PM")
   const timeString = now.toLocaleTimeString("en-US", { 
@@ -275,6 +281,7 @@ export async function confirmPayment(formData: FormData) {
       paymentRef: ref,
       studentId: user.id,
       status: "PENDING_PAYMENT",
+      createdAt: { gt: new Date(now.getTime() - PAYMENT_HOLD_MS) },
       listing: { is: { pickupWindowEnd: { gt: now }, status: { notIn: ["EXPIRED", "WITHDRAWN"] } } },
     },
     data: {

@@ -13,7 +13,7 @@ SecondHelping is a campus surplus-food marketplace. Dining hall staff post closi
 - Each reservation has a pickup code. Staff can confirm pickup from the dashboard.
 - The food team dashboard summarizes rescued meals, orders, and student savings.
 
-This is a prototype: it does not process payments, send notifications, or scan pickup codes. Staff currently confirm pickups in the dashboard.
+This is a prototype: payments and refunds are simulated, notifications are in-app, and staff confirm pickups by entering the student's pickup code in the dashboard.
 
 ## Tech stack
 
@@ -30,7 +30,7 @@ This is a prototype: it does not process payments, send notifications, or scan p
    pnpm install
    ```
 
-2. Create `.env` from `.env.example`, then set `DATABASE_URL` to your PostgreSQL connection string. The example values work with the included Docker Compose configuration.
+2. Create `.env` from `.env.example`, then set `DATABASE_URL` and replace `CRON_SECRET` with a random secret. The example database values work with the included Docker Compose configuration.
 
    ```bash
    copy .env.example .env
@@ -48,6 +48,14 @@ This is a prototype: it does not process payments, send notifications, or scan p
    pnpm db:migrate
    pnpm db:generate
    ```
+
+   Before deploying an existing database, hash any legacy plaintext passwords once:
+
+   ```bash
+   pnpm db:migrate-passwords
+   ```
+
+   Confirm the command reports that zero unhashed passwords remain. New demo accounts are seeded with hashed passwords.
 
 5. Load demo records:
 
@@ -75,7 +83,7 @@ New accounts created at `/signup` are student accounts. Staff member accounts mu
 | Main Dining Hall staff member | `sup1@buaa.test` | `adminadmin` |
 | 2nd Dining Hall staff member | `sup2@buaa.test` | `adminadmin` |
 
-These credentials are for local development only. Change or remove them before deploying the app. Legacy seeded passwords are upgraded to hashed passwords when the account next logs in.
+These credentials are for local development only. Change or remove them before deploying the app. Login rejects accounts whose password has not been migrated to scrypt.
 
 ## Main routes
 
@@ -109,14 +117,17 @@ The assistant runs against a local [Ollama](https://ollama.com) server, so no AP
 
 Requests are handled by `app/api/chat/route.ts` (login required). Tool definitions and their database queries live in `lib/chat-tools.ts`; the Ollama client and tool-calling loop are in `lib/ollama.ts`. If Ollama is not running, the widget shows a friendly error and the rest of the app is unaffected.
 
-## AI meal photo matching (Ollama)
+## Listing input by image and voice (Ollama)
 
-Staff members can upload a meal photo from **Publish Listings** and select **Process** to suggest a matching existing food catalog item. The photo is previewed in the browser; image processing only changes the Food selector. Staff members still review the choice and enter all listing details, including price and discount, manually. It does not create or publish a listing. If identification fails or is uncertain, choose a food manually.
+Staff members can upload a meal photo from **Publish Listings** and select **Process** to suggest a matching existing food catalog item. Image processing only changes the Food selector.
 
-The matcher runs locally through Ollama and requires Python 3.10+ on the application server. Pull the vision model separately from the chatbot model:
+Staff members can also select **Start voice input**, allow microphone access, and describe a meal listing for up to 60 seconds. The local speech model transcribes the recording, then the local text model extracts the catalog food, portion quantity, regular price, discount, and pickup times when they are clearly spoken. Only those fields are filled; missing or uncertain details and existing manually entered values are left alone. Review the transcript and form, correct any mistakes, and publish with the form button. Neither recording nor transcript is saved by the app. If voice processing is unavailable, the manual form and image matcher remain available.
+
+Both AI paths run locally through Ollama. The image matcher also requires Python 3.10+ on the application server. Pull the models:
 
 ```bash
 ollama pull qwen2.5vl:3b
+ollama pull frozenlab/qwen3-asr:0.6b
 ```
 
 Set these in `.env` (defaults shown):
@@ -124,9 +135,10 @@ Set these in `.env` (defaults shown):
 ```bash
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_VISION_MODEL=qwen2.5vl:3b
+OLLAMA_ASR_MODEL=frozenlab/qwen3-asr:0.6b
 ```
 
-`OLLAMA_VISION_MODEL` is separate from `OLLAMA_MODEL`, which configures the text-only chatbot. The API route runs `app/scripts/classify_meal.py`; on Windows it calls `python` from `PATH`, or you can set `PYTHON_PATH` to the Python executable. The endpoint accepts JPEG, PNG, WebP, and GIF images up to 10 MB. The uploaded image and generated catalog file are held in a temporary directory and removed after processing.
+`OLLAMA_VISION_MODEL` is separate from `OLLAMA_MODEL`, which configures the text assistant. `OLLAMA_ASR_MODEL` configures local speech recognition, while the text model interprets the recognized listing details. The image API runs `app/scripts/classify_meal.py`; on Windows it calls `python` from `PATH`, or you can set `PYTHON_PATH` to the Python executable. The image endpoint accepts JPEG, PNG, WebP, and GIF images up to 10 MB. The uploaded image and generated catalog file are held in a temporary directory and removed after processing. Voice recordings are converted to WAV in the browser and sent only to the configured local Ollama service.
 
 ## Inspect PostgreSQL data with Prisma Studio
 

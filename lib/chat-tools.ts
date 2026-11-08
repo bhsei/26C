@@ -92,9 +92,10 @@ export async function executeChatTool(name: string, args: Record<string, unknown
       await settleUnavailableOrders();
       const now = new Date();
       const hallFilter = typeof args.dining_hall === "string" && args.dining_hall.trim() ? args.dining_hall.trim() : null;
-      const excluded = Array.isArray(args.exclude_allergens)
-        ? args.exclude_allergens.filter((a): a is string => typeof a === "string" && ALLERGENS.has(a.toUpperCase())).map((a) => a.toUpperCase() as Allergen)
-        : [];
+      const requested = Array.isArray(args.exclude_allergens) ? args.exclude_allergens.filter((a): a is string => typeof a === "string") : [];
+      const unknown = requested.filter((a) => !ALLERGENS.has(a.toUpperCase()));
+      if (unknown.length) return JSON.stringify({ error: `Cannot filter unsupported allergen name(s): ${unknown.join(", ")}. Ask the user to check listing information and contact staff.` });
+      const excluded = requested.map((a) => a.toUpperCase() as Allergen);
 
       const listings = await prisma.listing.findMany({
         where: {
@@ -115,6 +116,7 @@ export async function executeChatTool(name: string, args: Record<string, unknown
           meal: listing.food.name,
           description: listing.food.description,
           allergens: listing.food.allergens,
+          allergenInformationProvided: listing.food.allergens.length > 0,
           diningHall: listing.diningHall.name,
           price: money(listing.priceCents),
           regularPrice: money(listing.originalPriceCents),

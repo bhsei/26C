@@ -11,12 +11,8 @@ export async function login(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const user = await prisma.user.findUnique({ where: { email } });
 
-  if (!user || !(await verifyPassword(password, user.password))) {
+  if (!user || !user.password.startsWith("scrypt$") || !(await verifyPassword(password, user.password))) {
     redirect("/login?error=invalid");
-  }
-
-  if (!user.password.startsWith("scrypt$")) {
-    await prisma.user.update({ where: { id: user.id }, data: { password: await hashPassword(password) } });
   }
 
   await createSession(user.id);

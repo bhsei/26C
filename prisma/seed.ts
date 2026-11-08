@@ -1,11 +1,14 @@
 import "dotenv/config";
 import { PrismaClient } from "../app/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { hashPassword } from "../lib/password";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
+  const demoStaffPassword = await hashPassword("adminadmin");
+  const demoStudentPassword = await hashPassword("studentstudent");
   // FK-safe delete order: children → parents
   await prisma.order.deleteMany();
   await prisma.authSession.deleteMany();
@@ -36,7 +39,7 @@ async function main() {
     data: {
       id: "supervisor-1",
       email: "sup1@buaa.test",
-      password: "adminadmin",
+      password: demoStaffPassword,
       name: "Dining Hall Staff Member",
       role: "SUPERVISOR",
       diningHallId: diningHall.id,
@@ -46,7 +49,7 @@ async function main() {
     data: {
       id: "supervisor-2",
       email: "sup2@buaa.test",
-      password: "adminadmin",
+      password: demoStaffPassword,
       name: "Dining Hall Staff Member",
       role: "SUPERVISOR",
       diningHallId: diningHall_2.id,
@@ -56,7 +59,7 @@ async function main() {
     data: {
       id: "student-1",
       email: "stu1@buaa.test",
-      password: "studentstudent",
+      password: demoStudentPassword,
       name: "Alex Student",
       role: "STUDENT",
     },
