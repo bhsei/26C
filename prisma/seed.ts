@@ -2,6 +2,7 @@ import "dotenv/config";
 import { PrismaClient } from "../app/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { hashPassword } from "../lib/password";
+import { syncImpactRecords, getImpactReport } from "../lib/sync";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
@@ -10,6 +11,8 @@ async function main() {
   const demoStaffPassword = await hashPassword("adminadmin");
   const demoStudentPassword = await hashPassword("studentstudent");
   // FK-safe delete order: children → parents
+  await prisma.impactRecord.deleteMany();   // NEW: references Order, DiningHall, EmissionFactor
+  await prisma.emissionFactor.deleteMany(); // NEW
   await prisma.order.deleteMany();
   await prisma.authSession.deleteMany();
   await prisma.listing.deleteMany();
@@ -66,7 +69,28 @@ async function main() {
   });
 
   // ─────────────────────────────────────────────
+  // Phase 2.5 (NEW): emission factors for the Impact Estimator
+  // PROXY / ILLUSTRATIVE values — replace with documented sources
+  // (e.g. WRAP, FAO, EPA) before reporting any real figure.
+  // ─────────────────────────────────────────────
+  const proxySource = "PROXY-ILLUSTRATIVE (replace with documented source)";
+  const factorsValidFrom = new Date("2026-01-01T00:00:00Z");
+  await prisma.emissionFactor.createMany({
+    data: [
+      { id: "ef-cooked-meat-v1",   category: "COOKED_MEAT",       co2ePerKg: 12.0, waterLPerKg: 4500, landM2PerKg: 25.0, source: proxySource, validFrom: factorsValidFrom },
+      // Newer factor for the same category → demonstrates versioning by validFrom
+      { id: "ef-cooked-meat-v2",   category: "COOKED_MEAT",       co2ePerKg: 13.5, waterLPerKg: 4700, landM2PerKg: 26.0, source: `${proxySource} v2`, validFrom: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
+      { id: "ef-cooked-veg-v1",    category: "COOKED_VEGETARIAN", co2ePerKg: 2.5,  waterLPerKg: 500,  landM2PerKg: 3.0,  source: proxySource, validFrom: factorsValidFrom },
+      { id: "ef-fresh-produce-v1", category: "FRESH_PRODUCE",     co2ePerKg: 0.9,  waterLPerKg: 300,  landM2PerKg: 1.0,  source: proxySource, validFrom: factorsValidFrom },
+      { id: "ef-bakery-deli-v1",   category: "BAKERY_DELI",       co2ePerKg: 3.2,  waterLPerKg: 800,  landM2PerKg: 5.0,  source: proxySource, validFrom: factorsValidFrom },
+      { id: "ef-dairy-v1",         category: "DAIRY_BASED",       co2ePerKg: 5.0,  waterLPerKg: 1500, landM2PerKg: 9.0,  source: proxySource, validFrom: factorsValidFrom },
+      { id: "ef-mixed-food-v1",    category: "MIXED_FOOD",        co2ePerKg: 3.0,  waterLPerKg: 700,  landM2PerKg: 5.0,  source: `${proxySource} generic fallback`, validFrom: factorsValidFrom },
+    ],
+  });
+
+  // ─────────────────────────────────────────────
   // Phase 3: foods (shared between halls — same dish, two listings)
+  // category + unitWeightKg are the inputs of the Impact Estimator
   // ─────────────────────────────────────────────
   const chickenRice = await prisma.food.create({
     data: {
@@ -74,6 +98,8 @@ async function main() {
       name: "Chicken Rice Closing Bag",
       description: "Hainanese-style chicken, rice, and soup from dinner service.",
       allergens: ["SOY", "SESAME"],
+      category: "COOKED_MEAT",
+      unitWeightKg: 0.55,
     },
   });
   const beefNoodle = await prisma.food.create({
@@ -82,6 +108,8 @@ async function main() {
       name: "Beef Noodle Bowl",
       description: "Braised beef and hand-pulled noodles.",
       allergens: ["WHEAT", "SOY"],
+      category: "COOKED_MEAT",
+      unitWeightKg: 0.6,
     },
   });
   const vegBowl = await prisma.food.create({
@@ -90,6 +118,8 @@ async function main() {
       name: "Seasonal Vegetable Bowl",
       description: "Seasonal greens and brown rice.",
       allergens: [],
+      category: "COOKED_VEGETARIAN",
+      unitWeightKg: 0.45,
     },
   });
   const charSiu = await prisma.food.create({
@@ -98,6 +128,8 @@ async function main() {
       name: "Char Siu Pork Rice",
       description: "Cantonese roast pork with jasmine rice and greens.",
       allergens: ["SOY"],
+      category: "COOKED_MEAT",
+      unitWeightKg: 0.5,
     },
   });
   const vegCurry = await prisma.food.create({
@@ -106,6 +138,20 @@ async function main() {
       name: "Vegetarian Curry Set",
       description: "Coconut vegetable curry with roti and pickles.",
       allergens: ["GLUTEN"],
+      category: "COOKED_VEGETARIAN",
+      unitWeightKg: 0.55,
+    },
+  });
+  // NEW — deliberately incomplete food (no category, no weight): its environmental
+  // metrics must show up as UNAVAILABLE, proving missing data is never guessed.
+  const surpriseBox = await prisma.food.create({
+    data: {
+      id: "food-surprise-box",
+      name: "Chef's Surprise Box",
+      description: "Assorted leftovers from the day's service.",
+      allergens: [],
+      category: null,
+      unitWeightKg: null,
     },
   });
 
@@ -228,7 +274,8 @@ async function main() {
     const pickupWindowStart = new Date(createdAt.getTime() - 30 * 60 * 1000);
     const pickupWindowEnd = new Date(createdAt.getTime() + 4 * 60 * 60 * 1000);
     const foods = [chickenRice, beefNoodle, vegBowl, charSiu, vegCurry];
-    const food = foods[index % foods.length];
+    // The oldest historical listing uses the incomplete "surprise box" (impact edge case)
+    const food = index === 29 ? surpriseBox : foods[index % foods.length];
     const originalPriceCents = [1375, 1950, 1200, 1450, 1300, 1680, 2150, 980, 1750, 1425][index % 10];
     const discountRate = [35, 40, 45, 50, 55, 60, 65, 70, 75, 80][index % 10];
     const quantityTotal = 10 + (index * 7) % 18;
@@ -259,6 +306,8 @@ async function main() {
         ? new Date(Date.now() - (3 - orderIndex) * 10 * 60 * 1000)
         : new Date(listing.createdAt.getTime() + orderIndex * 25 * 60 * 1000);
       const pickedUp = (listingIndex + orderIndex) % 5 !== 0;
+      // NEW — one cancelled + refunded order: must NOT be counted by the Impact Estimator
+      const cancelledAndRefunded = listingIndex === 3 && orderIndex === 0;
       return {
         id: `demo-order-${listingIndex + 1}-${orderIndex + 1}`,
         listingId: listing.id,
@@ -270,10 +319,16 @@ async function main() {
         platformFeeCents: 25,
         serviceFeeCents: 25,
         pickupCode: `DEMO-${String(listingIndex + 1).padStart(2, "0")}-${String(orderIndex + 1).padStart(2, "0")}`,
-        status: pickedUp ? "PICKED_UP" as const : "RESERVED" as const,
+        status: cancelledAndRefunded
+          ? "CANCELLED" as const
+          : pickedUp ? "PICKED_UP" as const : "RESERVED" as const,
         paymentRef: `demo-payment-${listingIndex + 1}-${orderIndex + 1}`,
         paidAt: createdAt,
-        pickedUpAt: pickedUp ? (listingIndex === 0 ? createdAt : new Date(createdAt.getTime() + 60 * 60 * 1000)) : null,
+        refundedAt: cancelledAndRefunded ? createdAt : null,
+        refundAmountCents: cancelledAndRefunded ? listing.priceCents : null,
+        pickedUpAt: !cancelledAndRefunded && pickedUp
+          ? (listingIndex === 0 ? createdAt : new Date(createdAt.getTime() + 60 * 60 * 1000))
+          : null,
         pickupWindowStart: listing.pickupWindowStart,
         pickupWindowEnd: listing.pickupWindowEnd,
         createdAt,
@@ -282,7 +337,21 @@ async function main() {
     }),
   );
   await prisma.order.createMany({ data: demoOrders });
-  
+
+  // ─────────────────────────────────────────────
+  // Phase 4.5 (NEW): impact records derived from PICKED_UP orders
+  // ─────────────────────────────────────────────
+  const impactSync = await syncImpactRecords(prisma);
+  const impact = await getImpactReport(prisma);
+  const all = impact.aggregates.ALL;
+  console.log(
+    `Impact records: ${impactSync.upserted} | meals=${all.mealsRescued.total}` +
+    ` kg=${all.kgDiverted.total} co2e=${all.co2Avoided.total}kg` +
+    ` water=${all.waterSaved.total}L land=${all.landSaved.total}m2` +
+    ` savings=${(all.studentSavings.total / 100).toFixed(2)}` +
+    ` (co2 coverage ${((all.co2Avoided.coverage ?? 0) * 100).toFixed(0)}%)`,
+  );
+
   //
   // Phase 5: Notifications
   //

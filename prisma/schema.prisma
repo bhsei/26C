@@ -15,15 +15,16 @@ datasource db {
 // ════════════════════════════════════════════════════════════════
 
 model DiningHall {
-  id          String    @id @default(cuid())
-  name        String    @unique
-  address     String?
-  latitude    Float?
-  longitude   Float?
-  supervisors User[]    @relation("Supervisors")
-  listings    Listing[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id            String         @id @default(cuid())
+  name          String         @unique
+  address       String?
+  latitude      Float?
+  longitude     Float?
+  supervisors   User[]         @relation("Supervisors")
+  listings      Listing[]
+  impactRecords ImpactRecord[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 }
 
 model Listing {
@@ -50,11 +51,13 @@ model Listing {
 }
 
 model Food {
-  id                 String        @id @default(cuid())
-  name               String
-  description        String
-  allergens          Allergen[]      @default([])
-  listings           Listing[]
+  id           String        @id @default(cuid())
+  name         String
+  description  String
+  allergens    Allergen[]    @default([])
+  category     FoodCategory? 
+  unitWeightKg Float?       
+  listings     Listing[]
 }
 
 model Order {
@@ -80,6 +83,7 @@ model Order {
   pickupWindowStart  DateTime
   pickupWindowEnd    DateTime
   pickedUpAt         DateTime?
+  impactRecords      ImpactRecord[]
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
@@ -127,6 +131,55 @@ model Notification {
   @@index([userId, createdAt])
 }
 
+model EmissionFactor {
+  id            String       @id @default(cuid())
+  category      FoodCategory
+  co2ePerKg     Float?       // kg CO2e avoided per kg of food diverted
+  waterLPerKg   Float?       // litres of water saved per kg
+  landM2PerKg   Float?       // m² of land saved per kg
+  source        String       // citation / methodology reference
+  validFrom     DateTime
+  impactRecords ImpactRecord[]
+  createdAt     DateTime     @default(now())
+
+  @@unique([category, validFrom])
+  @@index([category, validFrom])
+}
+
+model ImpactRecord {
+  id               String          @id @default(cuid())
+  orderId          String
+  order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  diningHallId     String
+  diningHall       DiningHall      @relation(fields: [diningHallId], references: [id])
+  occurredAt       DateTime        // = order.pickedUpAt
+  category         FoodCategory?
+  emissionFactorId String?
+  emissionFactor   EmissionFactor? @relation(fields: [emissionFactorId], references: [id])
+  methodVersion    String
+
+  mealsRescued        Int           // always measured (picked-up quantity)
+  kgDiverted          Float?
+  kgDivertedBasis     MetricBasis
+  co2AvoidedKg        Float?        // kg CO2e
+  co2AvoidedBasis     MetricBasis
+  waterSavedL         Float?        // litres
+  waterSavedBasis     MetricBasis
+  landSavedM2         Float?        // m²
+  landSavedBasis      MetricBasis
+  studentSavingsCents Int?
+  studentSavingsBasis MetricBasis
+
+  assumptions String[] @default([])  // human-readable assumptions used
+  notes       Json?                  // per-metric calculation notes
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orderId, methodVersion])
+  @@index([diningHallId, occurredAt])
+}
+
 // ════════════════════════════════════════════════════════════════
 // ENUMS 
 // ════════════════════════════════════════════════════════════════
@@ -162,4 +215,19 @@ enum OrderStatus {
   PICKED_UP
   CANCELLED
   EXPIRED
+}
+
+enum FoodCategory {
+  COOKED_MEAT
+  COOKED_VEGETARIAN
+  FRESH_PRODUCE
+  BAKERY_DELI
+  DAIRY_BASED
+  MIXED_FOOD // generic fallback factor
+}
+
+enum MetricBasis {
+  MEASURED
+  ESTIMATED
+  UNAVAILABLE
 }
