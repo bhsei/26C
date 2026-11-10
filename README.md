@@ -1,5 +1,7 @@
 # SecondHelping
 
+![Second Helping Logo](docs/SecondHelpingLogo.png)
+
 SecondHelping is a campus surplus-food marketplace. Dining hall staff post closing bags at a discount; students browse meals, filter by dining hall and allergens, reserve food, and show a pickup code to staff.
 
 ## Current features
