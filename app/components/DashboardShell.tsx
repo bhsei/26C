@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { logout } from "@/app/auth-actions";
@@ -32,9 +33,10 @@ export default async function DashboardShell({
   return (
     <main className="dashboard-shell">
       <aside className="sidebar">
-        <Link className="brand" href="/">
-          <span className="brand-mark">S</span>
-          <span>Second<span className="brand-light">Helping</span><small>MARKETPLACE</small></span>
+        <Link className="brand brand-image-only" href="/">
+          <span className="brand-mark">
+            <Image src="/SecondHelpingLogo.png" alt="SecondHelping logo" width={34} height={34} priority />
+          </span>
         </Link>
         <div className="side-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Workspace">
