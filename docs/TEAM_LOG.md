@@ -25,6 +25,8 @@ Last updated: 2026-11-08
 | from 2026-10-3 to 2026-10-12 | Built First Draft of the Entity Relationship Diagram | `e4d7087` | 6 |
 | 2026-10-15 | Built Second Draft of the Entity Relationship Diagram | `0d5a7f8` | 4 |
 | 2026-10-19 | Expanded SRS functional requirements (v0.3) | `155c11f`, `4b2992e` | 3 |
+| 2026-11-10 | Implemented Impact Estimator | `29470eb` | 3 |
+| 2026-11-10 | Second Helping Logo Hand-made from Sigma | `761c28`, `ca00865` | 2 |
 
 ## Zamo
 | Date | Task | Commit / PR | Hours |
