@@ -10,6 +10,7 @@ SecondHelping is a campus surplus-food marketplace. Dining hall staff post closi
 - Role-based access: students use `/student`; dining hall staff members use `/merchant`.
 - Unauthenticated visitors to either dashboard are redirected to the login page at `/`.
 - Staff can publish a closing bag with quantity, regular price, discount, allergens, and pickup window.
+- Staff may opt a listing into rule-based automatic discounts; the scheduler can lower its price in 5-point steps when demand lags, with the same price shown to every shopper and an 80% maximum discount.
 - Staff members can match a meal photo to an existing food catalog item while preparing a listing.
 - Students can filter available meals by dining hall and allergens, then reserve a meal.
 - Each reservation has a pickup code. Staff can confirm pickup from the dashboard.

@@ -1,7 +1,7 @@
 # Software Requirements Specification
 ## For SecondHelping
 
-Version 1.3
+Version 1.4
 
 Prepared by Bianca Zavadisk, Geming Wu, Gabriel Silva, Marwen Jadlaoui and Zamo Rzgar
 
@@ -46,6 +46,7 @@ Beihang University · Software Engineering · Team: The Debuggers
 | Requirement decomposition | 2026/10/28 | Expanded the catalog from 17 to 25 functional requirements by splitting composite requirements into atomic ones (login/session, publication/withdrawal, browsing/filtering, payment/settlement, code generation/confirmation, dashboard/impact report, notifications/reminders) and adding guest browsing; reordered requirements so implemented features precede the future roadmap | 1.1 |
 | Peer review remediation | 2026/11/08 | Clarified lifecycle rules, security and privacy constraints, pricing, reminders, allergen behavior, measurable quality targets, verification status, roadmap priority, and design references; aligned implemented fixes with the prototype | 1.2 |
 | Voice listing input | 2026/11/08 | Extended REQ-FUNC-020 with local voice capture, speech transcription, and selective extraction of explicitly spoken listing fields; updated setup and verification guidance | 1.3 |
+| Dynamic pricing agent | 2026/11/16 | Added optional, scheduled listing-wide discount adjustments using time remaining, inventory, paid sell-through, recent demand, a step size, and a maximum discount cap | 1.4 |
 
 ## 1. Introduction
 SecondHelping is a campus food-recovery and food-circulation application designed to reduce surplus food waste while helping students access low-cost meals before dining halls close. The current prototype is a reactive marketplace in which staff members post closing-bag listings and students reserve remaining meals. It includes a simulated payment and refund lifecycle, in-app notifications with timed pickup reminders, a conversational AI assistant that answers questions over live marketplace data, and image-based meal recognition for staff members. The future product direction extends the system from a simple rescue marketplace into an autonomous campus food-circulation network that predicts surplus before it happens, prevents avoidable waste, routes remaining food to its next best use, and measures environmental and social impact.
@@ -54,7 +55,7 @@ SecondHelping is a campus food-recovery and food-circulation application designe
 This Software Requirements Specification (SRS) describes the functionality and constraints of SecondHelping at two maturity levels: the current operational prototype and the planned future AI-driven system. The document is intended for product stakeholders, developers, testers, peer reviewers, and campus operators who need a shared understanding of what the system must do and how future improvements connect to the present product. It defines the product behavior, constraints, and verification expectations without describing a single implementation strategy.
 
 ### 1.2 Product Scope
-The current system scope includes role-based login, student browsing, dining-hall listing creation, image-based food catalog suggestions, reservation flow with simulated payment and refunds, pickup confirmation, in-app notifications with timed pickup reminders, a conversational AI assistant, and summary reporting. The planned future scope adds predictive surplus forecasting, prep optimization, expanded multimodal listing assistance, dynamic pricing, route-based food redistribution, and environmental impact estimation. The system may therefore evolve from a closing-bag marketplace into a broader campus circular-economy platform.
+The current system scope includes role-based login, student browsing, dining-hall listing creation, image and voice listing assistance, optional rule-based automatic discounts, reservation flow with simulated payment and refunds, pickup confirmation, in-app notifications with timed pickup reminders, a conversational AI assistant, and summary reporting. The planned future scope adds predictive surplus forecasting, prep optimization, expanded multimodal listing assistance, an advanced AI-driven pricing agent, route-based food redistribution, and environmental impact estimation. The system may therefore evolve from a closing-bag marketplace into a broader campus circular-economy platform.
 
 The in-scope features for the near term are: student and staff member user accounts, listing publication, allergen-aware filtering, order management, simulated payment and refunds, pickup code confirmation, in-app notifications and pickup reminders, the AI chat assistant, image-based food selection for staff members, and operational metric dashboards. Out-of-scope items for the current phase include integrated real payment processing, push or email notification channels, full supply-chain optimization, and advanced autonomous decision-making across multiple campuses.
 
@@ -197,7 +198,7 @@ The application shall integrate with the following technical interfaces:
 
 ### 3.2 Functional Requirements
 
-The catalog contains **25 functional requirements**: REQ-FUNC-001 through REQ-FUNC-020 describe the current prototype and REQ-FUNC-021 through REQ-FUNC-025 describe the planned future system. Priority ranks importance within the roadmap; status independently indicates delivery phase. Implemented requirements without recorded verification evidence are treated as **Implemented (verification pending)** until the evidence table is completed. The current repository has no automated test suite, so implementation status alone is not evidence of verification.
+The catalog contains **26 functional requirements**: REQ-FUNC-001 through REQ-FUNC-020 and REQ-FUNC-026 describe the current prototype; REQ-FUNC-021 through REQ-FUNC-025 describe the planned future system. Priority ranks importance within the roadmap; status independently indicates delivery phase. Implemented requirements without recorded verification evidence are treated as **Implemented (verification pending)** until the evidence table is completed. The current repository has no automated test suite, so implementation status alone is not evidence of verification.
 
 | ID | Title | Priority | Status |
 |----|-------|----------|--------|
@@ -221,6 +222,7 @@ The catalog contains **25 functional requirements**: REQ-FUNC-001 through REQ-FU
 | REQ-FUNC-018 | Timed pickup reminders | Should have | Implemented |
 | REQ-FUNC-019 | Conversational marketplace assistant | Should have | Implemented |
 | REQ-FUNC-020 | Multimodal listing assistant | Should have | Implemented (verification pending) |
+| REQ-FUNC-026 | Rule-based automatic discounts | Should have | Implemented (verification pending) |
 | REQ-FUNC-021 | Predictive surplus engine | Should have | Planned |
 | REQ-FUNC-022 | Prep copilot and digital twin | Could have | Planned |
 | REQ-FUNC-023 | Dynamic pricing agent | Could have | Planned |
@@ -799,6 +801,38 @@ Image and voice input can reduce repetitive entry while keeping the staff member
 
 **Verification Method:** Demonstration, authenticated endpoint checks, image format and size checks, voice duration and WAV-format checks, exact catalog-ID validation, extraction cases for explicitly stated and omitted fields, preservation of manually entered fields, manual fallback checks, and evaluation against labeled meal photos and voice recordings. Results are pending entry in §4.1.
 
+#### REQ-FUNC-026 — Rule-Based Automatic Discounts
+
+**Status:** Implemented (verification pending)
+
+**Priority:** Should have
+
+**Statement:**
+
+When a Staff Member opts a listing into automatic pricing, the system shall periodically consider time remaining, available inventory, paid sell-through, and recent paid demand. It may lower the listing price in 5-percentage-point discount steps, but shall never raise a published price or exceed an 80% discount. The resulting price shall be identical for every shopper and shall not change the price already captured by an order.
+
+**Rationale:**
+
+Transparent, bounded markdowns can improve sell-through for surplus meals while protecting students from personalized or exploitative pricing and leaving the Staff Member in control of whether a listing participates.
+
+**Preconditions:**
+
+- The listing is ACTIVE, has remaining inventory, and has not reached its pickup-window end.
+- The Staff Member enabled automatic pricing when creating the listing.
+- The one-minute local scheduler is running.
+
+**Acceptance Criteria:**
+
+1. Automatic pricing is opt-in per listing; listings without opt-in retain their published price.
+2. The scheduler reviews enabled listings no more often than once every 10 minutes.
+3. A 5-point discount increase may occur when at least 40% of the listing's published-to-pickup-end period has elapsed, at least 40% of stock remains, paid sell-through is below 60% of elapsed-period progress, and recent paid demand is weak; or in the final 15 minutes when at least 20% of stock remains, sell-through is below 80%, and recent paid demand is weak.
+4. Recent paid demand is measured from RESERVED and PICKED_UP orders created in the preceding 20 minutes; PENDING_PAYMENT holds do not count as paid demand.
+5. The discount never exceeds 80%, the price never increases, and each order retains its original price snapshot.
+6. Every review stores and displays a plain-language reason for changing or holding the price. Students see that an opted-in listing may receive further discounts as pickup approaches.
+7. A concurrent scheduler run or reservation cannot apply the same price change twice or overwrite a newer listing state.
+
+**Verification Method:** Deterministic rule scenarios for weak, strong, and absent demand; cap and 10-minute cadence checks; concurrency checks; and confirmation that all shoppers see the same listing price and existing orders retain their captured price. Results are pending entry in §4.1.
+
 #### REQ-FUNC-021 — Predictive Surplus Engine
 
 **Status:** Planned
@@ -1021,6 +1055,7 @@ Key implementation units of the current prototype:
 - Conversational assistant: authenticated API route (`app/api/chat/route.ts`), local Ollama client with a tool-calling loop (`lib/ollama.ts`), bounded data-access tools (`lib/chat-tools.ts`), floating chat widget (`app/components/ChatWidget.tsx`).
 - Image-based food selection: authenticated staff member endpoint (`app/api/food-image-match/route.ts`), client upload component (`app/components/FoodImageMatcher.tsx`), Python matcher (`app/scripts/classify_meal.py`) using `OLLAMA_VISION_MODEL` independently of the chat model.
 - Notifications: event triggers in server actions and the order-lifecycle module, a timed reminder endpoint (`app/api/notifications/route.ts`), a scheduler sidecar (`cron.js`) started together with the development server, and the notifications panel (`app/components/Notifications.tsx`).
+- Rule-based automatic discounts: the one-minute protected scheduler calls a deterministic pricing module (`lib/dynamic-pricing.ts`), which evaluates opted-in listings no more often than every 10 minutes and stores the last review reason.
 - Payment and settlement: reservation and payment server actions (`app/actions.ts`) and the settlement module (`lib/order-lifecycle.ts`).
 
 ### 3.6 AI/ML
@@ -1032,10 +1067,11 @@ Two AI components are operational in the current prototype, both running on loca
 
 2. Multimodal Listing Copilot (REQ-FUNC-020; image and voice-assisted form population available, model evaluation pending)
    - Accepts meal photos and suggests an existing Food catalog item in the staff member listing form, using constrained JSON output and catalog-ID validation.
-   - The staff member confirms the food and enters listing details manually; image processing does not set price or discount and does not publish the listing.
-   - Voice input and automated suggestions for descriptions, pricing, or pickup information remain future extensions.
+   - Image processing only suggests the catalog food and never publishes a listing.
+   - Voice input is transcribed locally and extracts clearly spoken catalog food, quantity, original price, discount, and pickup times; only non-null fields are filled and staff review and submit the listing.
+   - Suggestions for descriptions and other unlisted fields remain future extensions.
 
-These components demonstrate the privacy-preserving, locally hosted approach that the future modules will follow. The future product direction adds the following AI modules:
+The current rule-based markdown policy (REQ-FUNC-026) is deterministic business logic, not an AI model. REQ-FUNC-023 remains a future advanced Dynamic Pricing Agent. The current AI components demonstrate the privacy-preserving, locally hosted approach that future predictive modules will follow. The future product direction adds the following AI modules:
 
 AI acceptance targets for the current locally hosted features (not yet measured): the chat evaluation set shall contain 40 questions across live listings, own orders, pickup codes, allergens, time, small talk, prompt injection, cross-user data requests, and prohibited order changes; run each three times. Allergen filtering and privacy cases require 100% correct outcomes, and other answers require at least 90% correctness. The image matcher shall be measured on labeled images in `docs/sample_food_images/` plus 20 additional labeled images, with ≥80% top-1 accuracy and 100% invalid-file rejection. Re-evaluation is required when `OLLAMA_MODEL` or `OLLAMA_VISION_MODEL` changes. The additional 20-image set and recorded evaluation results are not yet present.
 
@@ -1059,7 +1095,7 @@ AI acceptance targets for the current locally hosted features (not yet measured)
    - Measures meals rescued, kilograms diverted, CO₂e avoided, water saved, and student savings.
    - Provides a real-time account of impact for each transaction or operational cycle.
 
-The AI components shall include human review for any decision that materially affects pricing, donation destination, or large-scale operational commitments.
+The current release's automatic discount behavior (REQ-FUNC-026) is a deterministic rule, not an AI agent. The advanced Dynamic Pricing Agent (REQ-FUNC-023) remains a future roadmap feature. Any future model-driven decision that materially affects pricing, donation destination, or large-scale operational commitments shall include human review.
 
 ## 4. Verification
 Verification is performed at two levels: the current prototype and the future AI extension. Current requirements are verified through functional validation, demonstration, and inspection. Future AI features shall be validated through model evaluation, operational review, and fairness checks in addition to functional testing.
@@ -1096,6 +1132,7 @@ Verification is performed at two levels: the current prototype and the future AI
 | REQ-FUNC-018 | Run the reminder sweep twice against controlled pickup windows | Each timed reminder sent exactly once, with food name and pickup code | — | — | Verification pending |
 | REQ-FUNC-019 | Ask listing, order, allergen, and time questions with and without a session | Live-data answers for signed-in users; HTTP 401 otherwise | — | — | Verification pending |
 | REQ-FUNC-020 | Upload a labeled meal photo and an invalid file | Correct catalog selection; invalid files rejected; manual fallback works | — | — | Verification pending |
+| REQ-FUNC-026 | Run rule scenarios for weak/strong demand, inventory, urgency, cadence, cap, and price snapshots | Only opted-in listings receive monotone 5-point markdowns; cap 80%; existing orders unchanged | — | — | Verification pending |
 
 ### 4.2 Non-Functional Verification
 
@@ -1145,7 +1182,7 @@ The following limitations are known and accepted for this phase; they are docume
 - User: identity, role, dining hall assignment, authentication, and session relationships.
 - DiningHall: dining location and associated staff members/listings.
 - Food: catalog entry with name, description, and allergens; allergen preferences are page filters only and are not stored on user accounts.
-- Listing: meal offer with price, quantity, discount, and pickup schedule, linked to a Food record.
+- Listing: meal offer with price, quantity, discount, and pickup schedule, linked to a Food record; optional rule-based pricing stores opt-in, last review time, and the last decision reason.
 - Order: reservation with simulated payment state, refund fields, pickup confirmation state, and per-order reminder flags (`reminderOpenSent`, `reminderCloseSent`).
 - Notification: in-app message addressed to one user, with read/unread state and timestamp.
 - AuthSession: hashed session token with expiry tracking.

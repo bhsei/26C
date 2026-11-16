@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth";
 import DashboardShell from "@/app/components/DashboardShell";
 import FoodImageMatcher from "@/app/components/FoodImageMatcher";
 import VoiceListingAssistant from "@/app/components/VoiceListingAssistant";
+import { AUTO_PRICING_MAX_DISCOUNT_RATE } from "@/lib/dynamic-pricing";
 import { settleUnavailableOrders } from "@/lib/order-lifecycle";
 import type { ListingStatus, OrderStatus } from "../generated/prisma/client";
 
@@ -70,6 +71,7 @@ export default async function MerchantPage() {
           <input id="quantityTotal" name="quantityTotal" type="number" min="1" placeholder="Quantity available" required className="rounded-lg border border-blue-200 bg-white p-2" />
           <input id="originalPriceCents" name="originalPriceCents" type="number" min="1" placeholder="Regular price (cents)" required className="rounded-lg border border-blue-200 bg-white p-2" />
           <label className="grid gap-1 text-sm text-blue-800">Discount (%)<input id="discountRate" name="discountRate" type="number" min="0" max="100" required className="rounded-lg border border-blue-200 bg-white p-2 text-blue-950" /></label>
+          <label className="flex items-start gap-2 text-sm text-blue-800 sm:col-span-2"><input name="autoPricingEnabled" type="checkbox" className="mt-1" /><span><b>Adjust the discount automatically</b><span className="block text-xs text-blue-600">A rule-based policy may increase the discount in 5-point steps, up to {AUTO_PRICING_MAX_DISCOUNT_RATE}%, when time is short, inventory is high, and paid demand is weak. It never raises the price.</span></span></label>
           <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
             <label className="grid gap-1 text-sm text-blue-800">
               Pickup starts
@@ -102,6 +104,8 @@ export default async function MerchantPage() {
         {diningHall.listings.map((listing) => <article key={listing.id} className="space-y-3 rounded-xl border border-blue-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="font-medium">{listing.food.name}</h3>
             <p className="text-sm text-blue-700">{money(listing.priceCents)} · {listing.discountRate}% off · {listing.quantityRemaining}/{listing.quantityTotal} left · {listing.orders.length} orders</p>
+            {listing.autoPricingEnabled && <p className="text-xs font-medium text-blue-700">Automatic discount on · maximum {AUTO_PRICING_MAX_DISCOUNT_RATE}% off{listing.lastAutoPriceReviewAt ? ` · last reviewed ${dateTime(listing.lastAutoPriceReviewAt)}` : ""}</p>}
+            {listing.lastAutoPriceReason && <p className="text-xs text-slate-600">Pricing note: {listing.lastAutoPriceReason}</p>}
             <p className="text-xs text-blue-600">Pickup: {dateTime(listing.pickupWindowStart)}–{dateTime(listing.pickupWindowEnd)}</p>
             {listing.food.description && <p className="text-sm text-blue-800">{listing.food.description}</p>}
             {listing.food.allergens.length > 0 && <p className="text-xs text-blue-600">Contains: {listing.food.allergens.join(", ")}</p>}

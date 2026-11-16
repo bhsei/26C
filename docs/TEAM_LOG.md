@@ -1,6 +1,13 @@
 # Team Contributions Log
 
-Last updated: 2026-11-08
+Last updated: 2026-11-16
+
+## 2026-11-16 rule-based pricing update
+
+| Date | Task | Commit / PR | Hours |
+|------|------|-------------|-------|
+| 2026-11-16 | Added optional rule-based listing discounts with time, inventory, paid sell-through, and recent-demand checks; 5-point reductions, 10-minute review intervals, global 80% cap, staff-visible reasons, student disclosure, migration, and REQ-FUNC-026 documentation | Working tree | — |
+| 2026-11-16 | Fixed scheduler `.env` loading so `CRON_SECRET` is available to the reminder/pricing worker; added HTTP and markdown-adjustment logging. Confirmed the reported listing was opted in but had no scheduler review before its pickup window ended. | Working tree | — |
 
 ## How to use this file
 - Add an entry every time you complete a meaningful task.
@@ -16,8 +23,9 @@ Last updated: 2026-11-08
 | 2026-09-21 | Created Baseline Application | `b6b5a3a` | 5 |
 | 2026-10-17 | Payment Simulation when Ordering + Bug Fixing (Not Adapted to The New Data Model) | `989d135` | 6 |
 | 2026-10-19 | Overview Info Page Before Login Page | `4a381f4` | 2 |
-| 2026-10-19 | Meal Image Matching Experiment | `d33b6d5` | 3 |
-| 2026-10-19 | Updated SRS to v1.3 and Implemented Multimodal Listing Assistant | `f9b008d` | 2 |
+| 2026-10-26 | Meal Image Matching Experiment | `d33b6d5` | 3 |
+| 2026-11-08 | Updated SRS to v1.3 and Implemented Multimodal Listing Assistant | `f9b008d` | 2 |
+| 2026-11-16 | Added optional rule-based listing discounts | `` | 3 |
 
 ## Gabriel
 | Date | Task | Commit / PR | Hours |

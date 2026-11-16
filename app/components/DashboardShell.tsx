@@ -35,7 +35,7 @@ export default async function DashboardShell({
       <aside className="sidebar">
         <Link className="brand brand-image-only" href="/">
           <span className="brand-mark">
-            <Image src="/SecondHelpingLogo.png" alt="SecondHelping logo" width={34} height={34} priority />
+            <Image src="/SecondHelpingLogo.png" alt="SecondHelping logo" width={120} height={50} priority />
           </span>
         </Link>
         <div className="side-label">WORKSPACE</div>

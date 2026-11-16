@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { settleUnavailableOrders } from "@/lib/order-lifecycle";
+import { adjustAutomaticListingPrices } from "@/lib/dynamic-pricing";
 
 export async function GET(request: Request) {
   const expected = process.env.CRON_SECRET;
@@ -9,6 +10,7 @@ export async function GET(request: Request) {
   }
   await settleUnavailableOrders();
   const now = new Date();
+  const pricing = await adjustAutomaticListingPrices(now);
   const tenMinsFromNow = new Date(now.getTime() + 10 * 60 * 1000);
   const thirtyMinsFromNow = new Date(now.getTime() + 30 * 60 * 1000);
 
@@ -86,6 +88,8 @@ export async function GET(request: Request) {
 
   return NextResponse.json({ 
     success: true, 
+    automaticPricesReviewed: pricing.reviewed,
+    automaticPricesAdjusted: pricing.adjusted,
     openingRemindersSent: openingSoonOrders.length, 
     alreadyOpenRemindersSent: alreadyOpenOrders.length, 
     closingRemindersSent: closingSoonOrders.length 

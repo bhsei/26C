@@ -20,6 +20,7 @@ export async function createListing(formData: FormData) {
   const foodId = String(formData.get("foodId") ?? "").trim();
   const originalPriceCents = Number(formData.get("originalPriceCents") ?? 0);
   const discountRate = Number(formData.get("discountRate") ?? 60);
+  const autoPricingEnabled = formData.get("autoPricingEnabled") === "on";
   const quantityTotal = Number(formData.get("quantityTotal") ?? 0);
   const pickupWindowStart = new Date(String(formData.get("pickupWindowStart") ?? ""));
   const pickupWindowEnd = new Date(String(formData.get("pickupWindowEnd") ?? ""));
@@ -28,6 +29,7 @@ export async function createListing(formData: FormData) {
     !foodId ||
     !Number.isInteger(originalPriceCents) || originalPriceCents <= 0 ||
     !Number.isInteger(discountRate) || discountRate < 0 || discountRate > 100 ||
+    (autoPricingEnabled && discountRate > 80) ||
     !Number.isInteger(quantityTotal) || quantityTotal <= 0 ||
     Number.isNaN(pickupWindowStart.getTime()) ||
     Number.isNaN(pickupWindowEnd.getTime()) ||
@@ -60,6 +62,9 @@ export async function createListing(formData: FormData) {
       originalPriceCents,
       priceCents: Math.round((originalPriceCents * (100 - discountRate)) / 100),
       discountRate,
+      autoPricingEnabled,
+      lastAutoPriceReviewAt: null,
+      lastAutoPriceReason: autoPricingEnabled ? 'Automatic discount enabled; waiting for the first review.' : null,
       quantityTotal,
       quantityRemaining: quantityTotal,
       pickupWindowStart,
