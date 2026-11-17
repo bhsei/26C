@@ -1,6 +1,6 @@
 # Team Contributions Log
 
-Last updated: 2026-11-16
+Last updated: 2026-11-17
 
 ## 2026-11-16 rule-based pricing update
 
@@ -43,6 +43,7 @@ Last updated: 2026-11-16
 | 2026-10-21 | Built AI chat assistant: Ollama tool-calling client (`lib/ollama.ts`), live-data tools (`lib/chat-tools.ts`), authenticated `/api/chat` endpoint, floating chat widget; evaluated models and set `qwen2:7b` as default | `1553611` | 6 |
 | 2026-10-21 | Updated documentation for the chat assistant: README setup section, `.env.example`, SRS v0.4 (REQ-FUNC-015 + appendices), team log | `1553611` | 2 |
 | 2026-10-27 | Fixed notification scheduler crash in `cron.js` (log statement inside the fetch chain caused a TypeError every tick) | `309fbb4` | 1 |
+| 2026-11-17 | Replaced the forced `window.location.href` reload in `ClearFiltersLink.tsx` with a standard Next.js `Link`, removing the final ESLint warning; verified lint, TypeScript, and the production build | Working tree | — |
 
 ## Bianca 比安卡
 | Date | Task | Commit / PR | Hours |
