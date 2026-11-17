@@ -71,6 +71,14 @@ export interface OrderImpactInput {
     category: FoodCategory | null;
     unitWeightKg: number | null;
   };
+  context?: {
+    categoryHint?: FoodCategory | null;
+    dailyProductionKg?: number;
+    dailyProductionMeals?: number;
+    forecastedSurplusMeals?: number;
+    weatherCondition?: string;
+    eventAttendance?: number;
+  };
 }
 
 export interface OrderImpact {
@@ -147,13 +155,46 @@ export class ImpactEstimator {
     };
   }
 
+  private resolvePortionWeightKg(input: Pick<OrderImpactInput, "food" | "context">) {
+    const explicit = input.food.unitWeightKg;
+    if (explicit !== null && explicit > 0) {
+      return {
+        kg: explicit,
+        note: `food catalog weight = ${explicit} kg`,
+      };
+    }
+
+    const ratio =
+      input.context && input.context.dailyProductionMeals && input.context.dailyProductionMeals > 0 && input.context.dailyProductionKg && input.context.dailyProductionKg > 0
+        ? input.context.dailyProductionKg / input.context.dailyProductionMeals
+        : null;
+
+    if (ratio !== null && ratio > 0) {
+      return {
+        kg: round(ratio, 4),
+        note: `ASSUMPTION: no food weight recorded; inferred ${round(ratio, 4)} kg per meal from daily production data (${input.context?.dailyProductionKg} kg / ${input.context?.dailyProductionMeals} meals)`,
+      };
+    }
+
+    if (input.context?.forecastedSurplusMeals && input.context.forecastedSurplusMeals > 0) {
+      const inferred = 0.45;
+      return {
+        kg: inferred,
+        note: `ASSUMPTION: forecasted surplus was available, so a conservative default meal weight of ${inferred} kg was used because this food record has no catalog weight`,
+      };
+    }
+
+    return null;
+  }
+
   estimateOrder(input: OrderImpactInput): OrderImpact {
     const { quantity, food } = input;
+    const effectiveCategory = food.category ?? input.context?.categoryHint ?? null;
     const base = {
       orderId: input.orderId,
       diningHallId: input.diningHallId,
       occurredAt: input.pickedUpAt,
-      category: food.category,
+      category: effectiveCategory,
       methodVersion: METHOD_VERSION,
     };
 
@@ -177,17 +218,18 @@ export class ImpactEstimator {
       value: quantity, basis: "MEASURED", note: "picked-up quantity",
     };
 
-    // weight — always an estimate: orders carry no scale reading
+    // weight — sourced from the product record when available; otherwise inferred from hall-level daily production data.
     let kgDiverted: Metric;
-    if (food.unitWeightKg === null || food.unitWeightKg <= 0) {
-      kgDiverted = unavailable("portion weight not documented for this food");
+    const inferredWeight = this.resolvePortionWeightKg(input);
+    if (inferredWeight === null) {
+      kgDiverted = unavailable("portion weight not documented for this food and no hall-level estimate was available");
     } else {
       kgDiverted = {
-        value: round(quantity * food.unitWeightKg),
+        value: round(quantity * inferredWeight.kg),
         basis: "ESTIMATED",
-        note: `${quantity} portion(s) x ${food.unitWeightKg} kg reference weight`,
+        note: `${quantity} portion(s) x ${inferredWeight.kg} kg inferred weight`,
       };
-      assumptions.push(`portion weight = ${food.unitWeightKg} kg`);
+      assumptions.push(inferredWeight.note);
     }
 
     // environmental — kg x factor
@@ -197,7 +239,7 @@ export class ImpactEstimator {
       const m = unavailable("kgDiverted unavailable");
       env = { co2Avoided: m, waterSaved: m, landSaved: m };
     } else {
-      const resolved = this.resolveFactor(food.category, input.pickedUpAt);
+      const resolved = this.resolveFactor(effectiveCategory, input.pickedUpAt);
       factor = resolved.factor;
       if (!factor) {
         const m = unavailable(resolved.note);

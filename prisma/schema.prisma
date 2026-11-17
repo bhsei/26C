@@ -22,7 +22,15 @@ model DiningHall {
   longitude     Float?
   supervisors   User[]         @relation("Supervisors")
   listings      Listing[]
+  listingDrafts ListingDraft[]
   impactRecords ImpactRecord[]
+  pricingPolicies PricingPolicy[]
+  dailyProductions DailyProduction[]
+  weatherObservations WeatherObservation[]
+  campaignEvents CampaignEvent[]
+  surplusForecasts SurplusForecast[]
+  rescueDispatches RescueDispatch[]
+  simulationScenarios SimulationScenario[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -47,6 +55,9 @@ model Listing {
   createdById String?
   createdBy   User?   @relation("CreatedBy", fields: [createdById], references: [id])
   orders    Order[]
+  events    ListingEvent[]
+  priceChanges PriceChange[]
+  mediaAssets MediaAsset[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -59,8 +70,204 @@ model Food {
   description  String
   allergens    Allergen[]    @default([])
   category     FoodCategory? 
-  unitWeightKg Float?       
+  unitWeightKg Float?
   listings     Listing[]
+  listingDrafts ListingDraft[]
+}
+
+model ListingDraft {
+  id                String            @id @default(cuid())
+  diningHallId      String
+  diningHall        DiningHall        @relation(fields: [diningHallId], references: [id])
+  createdById       String?
+  createdBy         User?             @relation("CreatedByDrafts", fields: [createdById], references: [id])
+  foodId            String?
+  food              Food?             @relation(fields: [foodId], references: [id])
+  title             String
+  originalPriceCents Int?
+  priceCents        Int?
+  discountRate      Int?
+  quantityTotal     Int?
+  pickupWindowStart DateTime?
+  pickupWindowEnd   DateTime?
+  status            DraftStatus       @default(DRAFT)
+  notes             String?
+  mediaAssets       MediaAsset[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model ListingEvent {
+  id        String   @id @default(cuid())
+  listingId String?
+  listing   Listing? @relation(fields: [listingId], references: [id])
+  eventType String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([listingId, createdAt])
+}
+
+model PriceChange {
+  id               String         @id @default(cuid())
+  listingId        String
+  listing          Listing        @relation(fields: [listingId], references: [id])
+  pricingPolicyId  String?
+  pricingPolicy    PricingPolicy? @relation(fields: [pricingPolicyId], references: [id])
+  oldPriceCents    Int
+  newPriceCents    Int
+  reason           String?
+  appliedAt        DateTime       @default(now())
+  createdAt        DateTime       @default(now())
+}
+
+model PricingPolicy {
+  id                String        @id @default(cuid())
+  diningHallId      String
+  diningHall        DiningHall    @relation(fields: [diningHallId], references: [id])
+  name              String
+  defaultDiscountRate Int          @default(0)
+  minDiscountRate   Int           @default(0)
+  maxDiscountRate   Int           @default(100)
+  autoApply         Boolean       @default(false)
+  validFrom         DateTime
+  validTo           DateTime?
+  notes             String?
+  priceChanges      PriceChange[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([diningHallId, validFrom])
+}
+
+model ModelVersion {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  modelFamily String
+  versionLabel String
+  notes       String?
+  publishedAt DateTime?
+  surplusForecasts SurplusForecast[]
+  createdAt   DateTime        @default(now())
+}
+
+model DailyProduction {
+  id             String       @id @default(cuid())
+  diningHallId   String
+  diningHall     DiningHall   @relation(fields: [diningHallId], references: [id])
+  producedOn     DateTime
+  category       FoodCategory?
+  preparedMeals  Int          @default(0)
+  soldMeals      Int          @default(0)
+  leftoverMeals  Int          @default(0)
+  preparedKg     Float?
+  leftoverKg     Float?
+  createdAt      DateTime     @default(now())
+
+  @@unique([diningHallId, producedOn, category])
+  @@index([diningHallId, producedOn])
+}
+
+model WeatherObservation {
+  id             String       @id @default(cuid())
+  diningHallId   String
+  diningHall     DiningHall   @relation(fields: [diningHallId], references: [id])
+  observedAt     DateTime
+  temperatureC   Float?
+  precipitationMm Float?
+  humidityPct    Float?
+  condition      String?
+  source         String?
+  surplusForecasts SurplusForecast[]
+  createdAt      DateTime     @default(now())
+
+  @@index([diningHallId, observedAt])
+}
+
+model CampaignEvent {
+  id              String          @id @default(cuid())
+  diningHallId    String?
+  diningHall      DiningHall?     @relation(fields: [diningHallId], references: [id])
+  name            String
+  startsAt        DateTime
+  endsAt          DateTime
+  expectedAttendance Int?
+  category        String?
+  notes           String?
+  surplusForecasts SurplusForecast[]
+  createdAt       DateTime        @default(now())
+}
+
+model SurplusForecast {
+  id                 String          @id @default(cuid())
+  diningHallId       String
+  diningHall         DiningHall      @relation(fields: [diningHallId], references: [id])
+  category           FoodCategory?
+  forecastDate       DateTime
+  predictedSurplusMeals Int?
+  predictedSurplusKg Float?
+  confidence         Float?
+  modelVersionId     String?
+  modelVersion       ModelVersion?   @relation(fields: [modelVersionId], references: [id])
+  weatherObservationId String?
+  weatherObservation WeatherObservation? @relation(fields: [weatherObservationId], references: [id])
+  campaignEventId    String?
+  campaignEvent      CampaignEvent?  @relation(fields: [campaignEventId], references: [id])
+  notes              String?
+  createdAt          DateTime        @default(now())
+
+  @@index([diningHallId, forecastDate])
+}
+
+model RescueDestination {
+  id               String          @id @default(cuid())
+  name             String
+  type             RescueDestinationType @default(PANTRY)
+  address          String?
+  capacityKg       Float?
+  active           Boolean         @default(true)
+  rescueDispatches RescueDispatch[]
+  createdAt        DateTime        @default(now())
+}
+
+model RescueDispatch {
+  id               String          @id @default(cuid())
+  diningHallId     String
+  diningHall       DiningHall      @relation(fields: [diningHallId], references: [id])
+  destinationId    String
+  destination      RescueDestination @relation(fields: [destinationId], references: [id])
+  category         FoodCategory?
+  dispatchedAt     DateTime
+  kgRedistributed  Float?
+  status           RescueDispatchStatus @default(PLANNED)
+  notes            String?
+  createdAt        DateTime        @default(now())
+
+  @@index([diningHallId, dispatchedAt])
+}
+
+model SimulationScenario {
+  id            String       @id @default(cuid())
+  diningHallId  String?
+  diningHall    DiningHall?  @relation(fields: [diningHallId], references: [id])
+  name          String
+  scenarioDate  DateTime
+  description   String?
+  inputs        Json?
+  outputs       Json?
+  createdAt     DateTime     @default(now())
+}
+
+model MediaAsset {
+  id            String       @id @default(cuid())
+  kind          MediaKind    @default(IMAGE)
+  url           String
+  filename      String?
+  listingId     String?
+  listing       Listing?     @relation(fields: [listingId], references: [id])
+  listingDraftId String?
+  listingDraft  ListingDraft? @relation(fields: [listingDraftId], references: [id])
+  createdAt     DateTime     @default(now())
 }
 
 model Order {
@@ -104,6 +311,7 @@ model User {
   diningHallId    String?
   diningHall      DiningHall?   @relation("Supervisors", fields: [diningHallId], references: [id])
   createdListings Listing[]     @relation("CreatedBy")
+  createdDrafts   ListingDraft[] @relation("CreatedByDrafts")
   orders          Order[]
   notifications   Notification[]
   sessions        AuthSession[]
@@ -220,6 +428,12 @@ enum OrderStatus {
   EXPIRED
 }
 
+enum DraftStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 enum FoodCategory {
   COOKED_MEAT
   COOKED_VEGETARIAN
@@ -233,4 +447,25 @@ enum MetricBasis {
   MEASURED
   ESTIMATED
   UNAVAILABLE
+}
+
+enum MediaKind {
+  IMAGE
+  AUDIO
+  VIDEO
+}
+
+enum RescueDestinationType {
+  PANTRY
+  SHELTER
+  STAFF_KITCHEN
+  COMPOST
+  OTHER
+}
+
+enum RescueDispatchStatus {
+  PLANNED
+  DISPATCHED
+  COMPLETED
+  CANCELLED
 }

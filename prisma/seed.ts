@@ -15,10 +15,23 @@ async function main() {
   await prisma.emissionFactor.deleteMany(); // NEW
   await prisma.order.deleteMany();
   await prisma.authSession.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.listingEvent.deleteMany();
+  await prisma.mediaAsset.deleteMany();
+  await prisma.priceChange.deleteMany();
+  await prisma.rescueDispatch.deleteMany();
+  await prisma.rescueDestination.deleteMany();
+  await prisma.simulationScenario.deleteMany();
+  await prisma.surplusForecast.deleteMany();
+  await prisma.campaignEvent.deleteMany();
+  await prisma.weatherObservation.deleteMany();
+  await prisma.dailyProduction.deleteMany();
+  await prisma.modelVersion.deleteMany();
+  await prisma.pricingPolicy.deleteMany();
+  await prisma.listingDraft.deleteMany();
   await prisma.listing.deleteMany();
   await prisma.food.deleteMany();
   await prisma.user.deleteMany();
-  await prisma.notification.deleteMany();
   await prisma.diningHall.deleteMany();
 
   // Longer window so the demo doesn't empty itself 45 min after seeding
@@ -387,6 +400,351 @@ async function main() {
   console.log(
     `Sample data seeded successfully. Dining halls: ${diningHall.name}, ${diningHall_2.name}`,
   );
+
+  const pricingPolicyMain = await prisma.pricingPolicy.create({
+    data: {
+      id: "policy-main",
+      diningHallId: diningHall.id,
+      name: "Main Hall Lunch Discount",
+      defaultDiscountRate: 40,
+      minDiscountRate: 20,
+      maxDiscountRate: 75,
+      autoApply: true,
+      validFrom: new Date("2026-01-01T00:00:00Z"),
+      notes: "Protects affordability while clearing surplus before end-of-service.",
+    },
+  });
+  const pricingPolicySecond = await prisma.pricingPolicy.create({
+    data: {
+      id: "policy-second",
+      diningHallId: diningHall_2.id,
+      name: "Second Hall Dynamic Closing Bag",
+      defaultDiscountRate: 55,
+      minDiscountRate: 30,
+      maxDiscountRate: 80,
+      autoApply: true,
+      validFrom: new Date("2026-01-01T00:00:00Z"),
+      notes: "Cleans inventory near closing and prioritizes student savings.",
+    },
+  });
+
+  const modelVersion = await prisma.modelVersion.create({
+    data: {
+      id: "model-v1",
+      name: "surplus-baseline-v1",
+      modelFamily: "surplus-forecast",
+      versionLabel: "v1.0",
+      notes: "Baseline forecast using sales, weather, and event intensity.",
+      publishedAt: new Date("2026-11-01T00:00:00Z"),
+    },
+  });
+
+  const weatherMain = await prisma.weatherObservation.create({
+    data: {
+      id: "weather-main-1",
+      diningHallId: diningHall.id,
+      observedAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+      temperatureC: 24.8,
+      precipitationMm: 0,
+      humidityPct: 64,
+      condition: "clear",
+      source: "campus weather station",
+    },
+  });
+  const weatherSecond = await prisma.weatherObservation.create({
+    data: {
+      id: "weather-second-1",
+      diningHallId: diningHall_2.id,
+      observedAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
+      temperatureC: 22.1,
+      precipitationMm: 3.5,
+      humidityPct: 71,
+      condition: "partly-cloudy",
+      source: "campus weather station",
+    },
+  });
+
+  const campaignEvent = await prisma.campaignEvent.create({
+    data: {
+      id: "campus-lecture-night",
+      diningHallId: diningHall.id,
+      name: "Engineering lecture night",
+      startsAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      endsAt: new Date(Date.now() + 3 * 60 * 60 * 1000),
+      expectedAttendance: 240,
+      category: "lecture",
+      notes: "Evening event often shifts dinner demand away from the meat station.",
+    },
+  });
+
+  await prisma.dailyProduction.createMany({
+    data: [
+      {
+        id: "prod-main-meat",
+        diningHallId: diningHall.id,
+        producedOn: new Date(Date.now() - 12 * 60 * 60 * 1000),
+        category: "COOKED_MEAT",
+        preparedMeals: 90,
+        soldMeals: 61,
+        leftoverMeals: 29,
+        preparedKg: 52.5,
+        leftoverKg: 16.5,
+      },
+      {
+        id: "prod-main-veg",
+        diningHallId: diningHall.id,
+        producedOn: new Date(Date.now() - 12 * 60 * 60 * 1000),
+        category: "COOKED_VEGETARIAN",
+        preparedMeals: 70,
+        soldMeals: 58,
+        leftoverMeals: 12,
+        preparedKg: 31.5,
+        leftoverKg: 5.3,
+      },
+      {
+        id: "prod-second-meat",
+        diningHallId: diningHall_2.id,
+        producedOn: new Date(Date.now() - 10 * 60 * 60 * 1000),
+        category: "COOKED_MEAT",
+        preparedMeals: 110,
+        soldMeals: 73,
+        leftoverMeals: 37,
+        preparedKg: 65.8,
+        leftoverKg: 19.7,
+      },
+      {
+        id: "prod-second-veg",
+        diningHallId: diningHall_2.id,
+        producedOn: new Date(Date.now() - 10 * 60 * 60 * 1000),
+        category: "COOKED_VEGETARIAN",
+        preparedMeals: 60,
+        soldMeals: 52,
+        leftoverMeals: 8,
+        preparedKg: 26.4,
+        leftoverKg: 3.6,
+      },
+    ],
+  });
+
+  await prisma.surplusForecast.createMany({
+    data: [
+      {
+        id: "forecast-main-meat",
+        diningHallId: diningHall.id,
+        category: "COOKED_MEAT",
+        forecastDate: new Date(Date.now() + 18 * 60 * 60 * 1000),
+        predictedSurplusMeals: 22,
+        predictedSurplusKg: 12.1,
+        confidence: 0.74,
+        modelVersionId: modelVersion.id,
+        weatherObservationId: weatherMain.id,
+        campaignEventId: campaignEvent.id,
+        notes: "This evening's lecture surge reduces student meat demand near closing.",
+      },
+      {
+        id: "forecast-main-veg",
+        diningHallId: diningHall.id,
+        category: "COOKED_VEGETARIAN",
+        forecastDate: new Date(Date.now() + 18 * 60 * 60 * 1000),
+        predictedSurplusMeals: 11,
+        predictedSurplusKg: 4.9,
+        confidence: 0.69,
+        modelVersionId: modelVersion.id,
+        weatherObservationId: weatherMain.id,
+        campaignEventId: campaignEvent.id,
+        notes: "Vegetarian station is stable but still trending into surplus.",
+      },
+      {
+        id: "forecast-second-main",
+        diningHallId: diningHall_2.id,
+        category: "COOKED_MEAT",
+        forecastDate: new Date(Date.now() + 22 * 60 * 60 * 1000),
+        predictedSurplusMeals: 18,
+        predictedSurplusKg: 10.5,
+        confidence: 0.71,
+        modelVersionId: modelVersion.id,
+        weatherObservationId: weatherSecond.id,
+        notes: "Moisture and a lighter lunch shift increase late meat surplus risk.",
+      },
+    ],
+  });
+
+  await prisma.rescueDestination.createMany({
+    data: [
+      {
+        id: "dest-pantry",
+        name: "Campus Pantry",
+        type: "PANTRY",
+        address: "Student Center, East Wing",
+        capacityKg: 250,
+        active: true,
+      },
+      {
+        id: "dest-shelter",
+        name: "Night Shelter",
+        type: "SHELTER",
+        address: "North Community Services",
+        capacityKg: 180,
+        active: true,
+      },
+      {
+        id: "dest-compost",
+        name: "Dining Hall Compost",
+        type: "COMPOST",
+        address: "Back-of-house loading bay",
+        capacityKg: 400,
+        active: true,
+      },
+    ],
+  });
+
+  await prisma.rescueDispatch.createMany({
+    data: [
+      {
+        id: "dispatch-main-1",
+        diningHallId: diningHall.id,
+        destinationId: "dest-pantry",
+        category: "COOKED_VEGETARIAN",
+        dispatchedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        kgRedistributed: 7.4,
+        status: "COMPLETED",
+        notes: "Delivered to student pantry after final lecture-period pickup rush.",
+      },
+      {
+        id: "dispatch-second-1",
+        diningHallId: diningHall_2.id,
+        destinationId: "dest-shelter",
+        category: "COOKED_MEAT",
+        dispatchedAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
+        kgRedistributed: 9.2,
+        status: "DISPATCHED",
+        notes: "Shelf-stable dishes routed before the end-of-day close window.",
+      },
+    ],
+  });
+
+  await prisma.simulationScenario.createMany({
+    data: [
+      {
+        id: "sim-lecture-night",
+        diningHallId: diningHall.id,
+        name: "Lecture-night prep reduction",
+        scenarioDate: new Date(Date.now() + 18 * 60 * 60 * 1000),
+        description: "Reduce prep by 15% to simulate lower surplus risk.",
+        inputs: { prepReductionPct: 15, targetCategory: "COOKED_MEAT" },
+        outputs: { predictedMealsSaved: 11, expectedWastageReductionKg: 6.2 },
+      },
+      {
+        id: "sim-rain-day",
+        diningHallId: diningHall_2.id,
+        name: "Rain-day pricing scenario",
+        scenarioDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        description: "Rainy weather reduces demand, so a stronger end-of-service discount is evaluated.",
+        inputs: { weather: "partly-cloudy", expectedDemandShift: -0.12 },
+        outputs: { projectedPickupRate: 0.7, expectedRescueMeals: 19 },
+      },
+    ],
+  });
+
+  await prisma.listingDraft.createMany({
+    data: [
+      {
+        id: "draft-main-1",
+        diningHallId: diningHall.id,
+        createdById: supervisor1.id,
+        foodId: vegBowl.id,
+        title: "Vegetable bowl draft",
+        originalPriceCents: 1200,
+        priceCents: 540,
+        discountRate: 55,
+        quantityTotal: 16,
+        pickupWindowStart: new Date(Date.now() + 30 * 60 * 1000),
+        pickupWindowEnd: new Date(Date.now() + 5 * 60 * 60 * 1000),
+        status: "DRAFT",
+        notes: "Candidate for evening closing-bag listing.",
+      },
+      {
+        id: "draft-second-1",
+        diningHallId: diningHall_2.id,
+        createdById: supervisor2.id,
+        foodId: charSiu.id,
+        title: "Char siu rice draft",
+        originalPriceCents: 1450,
+        priceCents: 580,
+        discountRate: 60,
+        quantityTotal: 12,
+        pickupWindowStart: new Date(Date.now() + 45 * 60 * 1000),
+        pickupWindowEnd: new Date(Date.now() + 6 * 60 * 60 * 1000),
+        status: "PUBLISHED",
+        notes: "Fast-moving item; publish with a prompt override if demand spikes.",
+      },
+    ],
+  });
+
+  await prisma.listingEvent.createMany({
+    data: [
+      {
+        id: "event-listing-1",
+        listingId: "listing-1",
+        eventType: "CREATED",
+        metadata: { source: "web-form" },
+      },
+      {
+        id: "event-listing-2",
+        listingId: "listing-1",
+        eventType: "PRICE_UPDATED",
+        metadata: { oldPriceCents: 1375, newPriceCents: 550, reason: "end-of-day closing-bag push" },
+      },
+      {
+        id: "event-listing-3",
+        listingId: "listing-7",
+        eventType: "SOLD_OUT",
+        metadata: { soldOutAt: new Date().toISOString() },
+      },
+    ],
+  });
+
+  await prisma.priceChange.createMany({
+    data: [
+      {
+        id: "price-change-1",
+        listingId: "listing-1",
+        pricingPolicyId: pricingPolicyMain.id,
+        oldPriceCents: 1375,
+        newPriceCents: 550,
+        reason: "Automatic closing-bag discount",
+        appliedAt: new Date(Date.now() - 30 * 60 * 1000),
+      },
+      {
+        id: "price-change-2",
+        listingId: "listing-7",
+        pricingPolicyId: pricingPolicySecond.id,
+        oldPriceCents: 1450,
+        newPriceCents: 580,
+        reason: "Demand-balancing policy",
+        appliedAt: new Date(Date.now() - 75 * 60 * 1000),
+      },
+    ],
+  });
+
+  await prisma.mediaAsset.createMany({
+    data: [
+      {
+        id: "asset-1",
+        kind: "IMAGE",
+        url: "https://example.com/images/chicken-rice.jpg",
+        filename: "chicken-rice.jpg",
+        listingId: "listing-1",
+      },
+      {
+        id: "asset-2",
+        kind: "IMAGE",
+        url: "https://example.com/images/veg-bowl.jpg",
+        filename: "veg-bowl.jpg",
+        listingDraftId: "draft-main-1",
+      },
+    ],
+  });
 }
 
 main()
