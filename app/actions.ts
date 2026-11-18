@@ -7,6 +7,7 @@ import { randomUUID, randomBytes } from "crypto";
 import { redirect } from "next/navigation";
 import { settleUnavailableOrders } from "@/lib/order-lifecycle";
 import { sendOrderPlacedNotifications } from "@/lib/notifications";
+import { evaluateRescueRoute } from "@/lib/rescue-routing";
 
 const PLATFORM_FEE_CENTS = 25;
 const SERVICE_FEE_CENTS = 25;
@@ -340,6 +341,117 @@ export async function confirmPayment(formData: FormData) {
 
   revalidatePath(`/pay/${ref}`);
   revalidatePath("/orders");
+  revalidatePath("/merchant");
+  revalidatePath("/");
+}
+
+// RESCUE ROUTING ACTIONS
+
+// Recommend a rescue route for a listing, based on its details and current inventory.
+export async function recommendRescueRoute(formData: FormData) {
+  const supervisor = await requireRole("SUPERVISOR");
+  if (!supervisor.diningHallId) return;
+
+  const listingId = String(formData.get("listingId") ?? "").trim();
+  const listing = await prisma.listing.findUnique({
+    where: { id: listingId },
+    include: { food: true, diningHall: true },
+  });
+
+  if (!listing || listing.diningHallId !== supervisor.diningHallId) return;
+
+  const destinations = await prisma.rescueDestination.findMany({
+    where: { active: true },
+    orderBy: { name: "asc" },
+  });
+
+  const recommendation = evaluateRescueRoute({
+    food: {
+      name: listing.food.name,
+      category: listing.food.category,
+      unitWeightKg: listing.food.unitWeightKg,
+      safeForConsumption: true,
+      safeForDonation: listing.food.allergens.length === 0,
+    },
+    quantityRemaining: listing.quantityRemaining,
+    estimatedKg: listing.quantityRemaining * (listing.food.unitWeightKg ?? 0.65),
+    minutesUntilDeadline: Math.max(0, (listing.pickupWindowEnd.getTime() - Date.now()) / 60000),
+    destinations: destinations.map((destination) => ({
+      id: destination.id,
+      name: destination.name,
+      type: destination.type,
+      address: destination.address,
+      capacityKg: destination.capacityKg,
+      active: destination.active,
+    })),
+  });
+
+  const destinationId = recommendation.recommendedDestination?.id ?? recommendation.fallbackDestination?.id ?? null;
+  if (!destinationId) {
+    await prisma.listingEvent.create({
+      data: {
+        listingId: listing.id,
+        eventType: "RESCUE_ROUTING_NO_DESTINATION",
+        metadata: {
+          recommendation: recommendation.reason,
+          explanation: recommendation.explanation,
+          requiresApproval: recommendation.requiresApproval,
+          status: recommendation.status,
+        },
+      },
+    });
+    return;
+  }
+
+  const destinationName = destinations.find((destination) => destination.id === destinationId)?.name ?? "Unassigned destination";
+  const dispatch = await prisma.rescueDispatch.create({
+    data: {
+      diningHallId: listing.diningHallId,
+      destinationId,
+      category: listing.food.category,
+      dispatchedAt: new Date(),
+      kgRedistributed: recommendation.estimatedKg,
+      status: recommendation.requiresApproval ? "PLANNED" : "DISPATCHED",
+      notes: `${recommendation.reason} ${recommendation.explanation}`,
+    },
+  });
+
+  await prisma.listingEvent.create({
+    data: {
+      listingId: listing.id,
+      eventType: recommendation.requiresApproval ? "RESCUE_ROUTING_RECOMMENDED" : "RESCUE_ROUTING_DISPATCHED",
+      metadata: {
+        recommendation: recommendation.reason,
+        destinationId,
+        destinationName,
+        requiresApproval: recommendation.requiresApproval,
+        status: recommendation.status,
+      },
+    },
+  });
+
+  revalidatePath("/merchant");
+  revalidatePath("/");
+}
+
+// Approve a previously recommended rescue route dispatch.
+export async function approveRescueRoute(formData: FormData) {
+  const supervisor = await requireRole("SUPERVISOR");
+  if (!supervisor.diningHallId) return;
+
+  const dispatchId = String(formData.get("dispatchId") ?? "").trim();
+  const dispatch = await prisma.rescueDispatch.findFirst({
+    where: { id: dispatchId, diningHallId: supervisor.diningHallId, status: "PLANNED" },
+    include: { destination: true },
+  });
+
+  if (!dispatch) return;
+
+  await prisma.rescueDispatch.update({
+    where: { id: dispatch.id },
+    data: { status: "DISPATCHED", notes: `${dispatch.notes ?? ""} Approved by ${supervisor.name ?? supervisor.email}.` },
+  });
+
   revalidatePath("/merchant");
   revalidatePath("/");
 }

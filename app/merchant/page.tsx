@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
-import { confirmPickup, createListing, withdrawListing } from "@/app/actions";
+import { approveRescueRoute, confirmPickup, createListing, recommendRescueRoute, withdrawListing } from "@/app/actions";
+import { evaluateRescueRoute } from "@/lib/rescue-routing";
 import { requireRole } from "@/lib/auth";
 import DashboardShell from "@/app/components/DashboardShell";
 import FoodImageMatcher from "@/app/components/FoodImageMatcher";
@@ -30,7 +31,45 @@ export default async function MerchantPage() {
 
   const foods = await prisma.food.findMany({ orderBy: { name: "asc" } });
 
+  const rescueDestinations = await prisma.rescueDestination.findMany({
+    where: { active: true },
+    orderBy: { name: "asc" },
+  });
+
+  const rescueDispatches = await prisma.rescueDispatch.findMany({
+    where: { diningHallId: supervisor.diningHallId },
+    orderBy: { dispatchedAt: "desc" },
+    take: 8,
+    include: { destination: true },
+  });
+
   if (!diningHall) return <p className="p-8 text-blue-900">No dining hall found. Run the seed.</p>;
+
+  const rescueSuggestions = diningHall.listings
+    .filter((listing) => listing.quantityRemaining > 0 && !["EXPIRED", "WITHDRAWN"].includes(listing.status))
+    .map((listing) => ({
+      listing,
+      recommendation: evaluateRescueRoute({
+        food: {
+          name: listing.food.name,
+          category: listing.food.category,
+          unitWeightKg: listing.food.unitWeightKg,
+          safeForConsumption: true,
+          safeForDonation: listing.food.allergens.length === 0,
+        },
+        quantityRemaining: listing.quantityRemaining,
+        estimatedKg: listing.quantityRemaining * (listing.food.unitWeightKg ?? 0.65),
+        minutesUntilDeadline: Math.max(0, (listing.pickupWindowEnd.getTime() - Date.now()) / 60000),
+        destinations: rescueDestinations.map((destination) => ({
+          id: destination.id,
+          name: destination.name,
+          type: destination.type,
+          address: destination.address,
+          capacityKg: destination.capacityKg,
+          active: destination.active,
+        })),
+      }),
+    }));
 
   const termStart = new Date(new Date().getFullYear(), new Date().getMonth() - 4, 1);
   const termOrders = diningHall.listings.flatMap((listing) => listing.orders).filter((order) => order.createdAt >= termStart);
@@ -112,6 +151,61 @@ export default async function MerchantPage() {
           </div><div className="listing-actions"><span className={`listing-status listing-status-${listing.status.toLowerCase()}`}>{listingStatusLabel[listing.status]}</span>{["ACTIVE", "SOLD_OUT"].includes(listing.status) && listing.pickupWindowEnd > new Date() && <form action={withdrawListing}><input type="hidden" name="listingId" value={listing.id} /><button type="submit" className="withdraw-button">Withdraw listing</button></form>}</div></div>
             {listing.orders.length > 0 && <div className="border-t border-blue-100 pt-3"><h4 className="mb-2 text-sm font-semibold">Order status</h4><ul className="space-y-2 text-sm">{listing.orders.map((order) => { const canConfirm = order.status === "RESERVED" && !["EXPIRED", "WITHDRAWN"].includes(listing.status) && listing.pickupWindowEnd > new Date(); return <li key={order.id} className="merchant-order-row"><div><span className="merchant-order-status">{orderStatusLabel[order.status]}</span><span className="merchant-order-price"> · {money(order.finalPriceCents * order.quantity)}</span>{order.refundedAt && <p className="refund-note">Simulated refund recorded: {money(order.refundAmountCents ?? 0)}.</p>}{order.status === "EXPIRED" && !order.refundedAt && <p className="refund-note">Expired before payment; no charge was made.</p>}{order.status === "CANCELLED" && !order.refundedAt && <p className="refund-note">Canceled before payment; no charge was made.</p>}</div>{order.pickupCode && <span className="font-mono">{order.pickupCode}</span>}{canConfirm && <form action={confirmPickup}><input type="hidden" name="orderId" value={order.id} /><label className="sr-only" htmlFor={`pickup-${order.id}`}>Enter the student&apos;s pickup code</label><input id={`pickup-${order.id}`} name="pickupCode" required placeholder="Enter pickup code" autoComplete="off" className="rounded border p-2 font-mono" /><button type="submit" className="confirm-pickup-button">Confirm pickup</button></form>}</li>; })}</ul></div>}
         </article>)}
+      </section>
+      <section className="space-y-4">
+        <h2 className="font-semibold text-blue-900">Rescue routing</h2>
+        <div className="space-y-3">
+          {rescueSuggestions.length === 0 ? (
+            <p className="text-sm text-blue-700">No active closing-bag listings need a rescue recommendation.</p>
+          ) : rescueSuggestions.map(({ listing, recommendation }) => (
+            <div key={listing.id} className="rounded-xl border border-blue-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-medium">{listing.food.name}</h3>
+                  <p className="text-sm text-blue-700">{listing.quantityRemaining} remaining · {listing.food.allergens.length > 0 ? `Contains ${listing.food.allergens.join(", ")}` : "No allergen flags recorded"}</p>
+                </div>
+                <span className="rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">{recommendation.status}</span>
+              </div>
+              <p className="mt-2 text-sm text-blue-800">{recommendation.reason}</p>
+              <p className="mt-1 text-sm text-blue-700">{recommendation.explanation}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {recommendation.recommendedDestination && (
+                  <span className="rounded bg-green-50 px-2 py-1 text-xs font-medium text-green-700">Recommended: {recommendation.recommendedDestination.name}</span>
+                )}
+                {recommendation.fallbackDestination && (
+                  <span className="rounded bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">Fallback: {recommendation.fallbackDestination.name}</span>
+                )}
+              </div>
+              <form action={recommendRescueRoute} className="mt-3">
+                <input type="hidden" name="listingId" value={listing.id} />
+                <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+                  {recommendation.requiresApproval ? "Request operator review" : "Save recommended route"}
+                </button>
+              </form>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="space-y-4">
+        <h2 className="font-semibold text-blue-900">Recent rescue dispatches</h2>
+        <div className="space-y-3">
+          {rescueDispatches.map((dispatch) => (
+            <div key={dispatch.id} className="rounded-xl border border-blue-200 bg-white p-4 shadow-sm">
+              <div className="flex justify-between gap-3">
+                <h3 className="font-medium">{dispatch.destination.name}</h3>
+                <span className="rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">{dispatch.status}</span>
+              </div>
+              <p className="mt-1 text-sm text-blue-800">{dispatch.notes ?? "No note recorded."}</p>
+              <p className="mt-2 text-xs text-blue-600">{dispatch.kgRedistributed ?? 0} kg · {dateTime(dispatch.dispatchedAt)}</p>
+              {dispatch.status === "PLANNED" && (
+                <form action={approveRescueRoute} className="mt-3">
+                  <input type="hidden" name="dispatchId" value={dispatch.id} />
+                  <button type="submit" className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700">Approve dispatch</button>
+                </form>
+              )}
+            </div>
+          ))}
+        </div>
       </section>
     </div>
     </DashboardShell>
