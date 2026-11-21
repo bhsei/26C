@@ -165,14 +165,14 @@ If these assumptions fail, predictive features and routing decisions may need ma
 | Pricing | Fixed discount model | Dynamic, fairness-constrained pricing |
 | Payments | Simulated payment, automatic refunds | Real payment provider integration |
 | Notifications | In-app messages and timed pickup reminders | Push, email, and preference-based channels |
-| Routing | Manual pickup confirmation | Rescue router for pantry, shelter, and compost paths |
+| Routing | Rule-based rescue router for pantry, shelter, staff-kitchen, and compost paths, with operator approval | Forecast-driven rescue planning, learned ranking among eligible destinations, and volunteer logistics |
 | Analytics | Saved meals and order totals | CO₂e, water, waste, and social-impact calculations |
 | Assistant | Tool-based chat over live marketplace data (local LLM) | Multimodal listing copilot and personalized guidance |
 
 ## 3. Requirements
 ### 3.1 External Interfaces
 #### 3.1.1 User Interfaces
-The application shall provide browser-based web interfaces for all user roles. The current system includes a public overview page, login, signup, student marketplace and orders views, a dining-hall dashboard, a simulated payment page, an impact report, a notifications bell with unread-count badge, and a floating chat assistant for signed-in users. Future interfaces may include AI dashboards, forecasting outputs, pricing recommendation panels, and food-routing status views.
+The application shall provide browser-based web interfaces for all user roles. The current system includes a public overview page, login, signup, student marketplace and orders views, a dining-hall dashboard, a simulated payment page, an impact report, a notifications bell with unread-count badge, a rescue-routing panel on the dining-hall dashboard, and a floating chat assistant for signed-in users. Future interfaces may include AI dashboards, forecasting outputs, and pricing recommendation panels.
 
 - The login page shall allow an authenticated user to access the correct dashboard.
 - The signup page shall create a student account with valid email and password validation.
@@ -198,7 +198,7 @@ The application shall integrate with the following technical interfaces:
 
 ### 3.2 Functional Requirements
 
-The catalog contains **26 functional requirements**: REQ-FUNC-001 through REQ-FUNC-020 and REQ-FUNC-026 describe the current prototype; REQ-FUNC-021 through REQ-FUNC-025 describe the planned future system. Priority ranks importance within the roadmap; status independently indicates delivery phase. Implemented requirements without recorded verification evidence are treated as **Implemented (verification pending)** until the evidence table is completed. The current repository has no automated test suite, so implementation status alone is not evidence of verification.
+The catalog contains **26 functional requirements**: REQ-FUNC-001 through REQ-FUNC-020, REQ-FUNC-024, and REQ-FUNC-026 describe the current prototype; REQ-FUNC-021 through REQ-FUNC-023 and REQ-FUNC-025 describe the planned future system. Priority ranks importance within the roadmap; status independently indicates delivery phase. Implemented requirements without recorded verification evidence are treated as **Implemented (verification pending)** until the evidence table is completed. The repository has automated unit tests only for selected rule modules (for example, rescue routing); implementation status alone is not evidence of verification.
 
 | ID | Title | Priority | Status |
 |----|-------|----------|--------|
@@ -223,10 +223,10 @@ The catalog contains **26 functional requirements**: REQ-FUNC-001 through REQ-FU
 | REQ-FUNC-019 | Conversational marketplace assistant | Should have | Implemented |
 | REQ-FUNC-020 | Multimodal listing assistant | Should have | Implemented (verification pending) |
 | REQ-FUNC-026 | Rule-based automatic discounts | Should have | Implemented (verification pending) |
+| REQ-FUNC-024 | Rescue routing | Should have | Implemented (verification pending) |
 | REQ-FUNC-021 | Predictive surplus engine | Should have | Planned |
 | REQ-FUNC-022 | Prep copilot and digital twin | Could have | Planned |
 | REQ-FUNC-023 | Dynamic pricing agent | Could have | Planned |
-| REQ-FUNC-024 | Rescue routing | Should have | Planned |
 | REQ-FUNC-025 | Impact estimator | Should have | Planned |
 
 #### REQ-FUNC-001 — User Login
@@ -925,34 +925,48 @@ Context-aware pricing can encourage timely food recovery while balancing afforda
 
 #### REQ-FUNC-024 — Rescue Routing
 
-**Status:** Planned
+**Status:** Implemented (verification pending; rule-based, not an AI model)
+
 **Priority:** Should have
 
 **Statement:**
 
-The future system shall recommend an appropriate destination for eligible unsold food, considering food safety and handling requirements, destination capacity, time constraints, and operational feasibility.
+The system shall recommend an appropriate destination for unsold food from a dining hall's listings, considering food safety and handling requirements, destination capacity, time constraints, and operational feasibility. Recommendations are produced by deterministic, documented rules so that every decision is predictable, explainable, and testable. A Staff Member decides whether to act on a recommendation, and high-impact routes require explicit approval before dispatch.
 
 **Rationale:**
 
-Rescue routing can help ensure that food remaining after the student marketplace closes is directed toward an appropriate recovery or disposal pathway.
+Rescue routing helps ensure that food remaining after, or late in, the student marketplace window is directed toward the best available recovery or disposal pathway instead of being discarded. Because food-safety decisions must be auditable, the routing core is rule-based; future AI components may assist around it but shall not override its safety filters.
 
 **Preconditions:**
 
-- The system has information about the unsold food and its handling constraints.
-- Candidate destinations and their relevant capabilities are available.
-- The routing service is available.
+- The Staff Member is signed in and assigned to a dining hall.
+- The listing has unsold units: unclaimed units while the pickup window is open, or units not picked up when the window ended no more than 6 hours earlier.
+- At least one active rescue destination (pantry, shelter, staff kitchen, compost, or other) is configured.
+
+**Routing Rules:**
+
+- **Handoff deadline:** pickup-window end plus a 120-minute safe holding time. When the deadline has passed, the food is treated as unfit for people.
+- **Quantity and weight:** open listings route only unclaimed units (reserved meals stay with students); closed listings route all units not picked up. Weight = units × the food's catalog unit weight, or a 0.45 kg default when none is recorded (the same default used by the Impact Estimator).
+- **Capacity:** a destination is eligible only if its configured daily capacity, minus kilograms already planned or dispatched to it in the last 24 hours, covers the estimated weight.
+- **Safety:** food unfit for people is routed only to compost or other disposal paths. Food with any allergen flag is not sent to external donation (pantry or shelter), because allergen labelling cannot be guaranteed off campus; it may go to the staff kitchen.
+- **Timing:** pantry and shelter require at least 45 minutes before the deadline; the staff kitchen requires at least 20 minutes; disposal paths have no time limit.
+- **Priority among eligible destinations:** pantry, then shelter, then staff kitchen, then compost, then other.
+- **Fallback:** the highest-priority compost/other path that is not the recommendation, preferring one with enough capacity.
+- **Approval:** required when the estimated weight is 8 kg or more, when the destination is a pantry or shelter, when a human-facing destination has less than 60 minutes left, or whenever only an unchecked fallback is available.
 
 **Acceptance Criteria:**
 
-1. The system identifies candidate destinations that satisfy the configured eligibility and operational constraints.
-2. The system recommends a destination when at least one feasible option exists.
-3. The system explains the principal factors behind the recommendation.
-4. Food that does not satisfy the required safety or handling conditions is not recommended for human consumption or donation.
-5. If no feasible destination exists, the system reports that condition and identifies an appropriate fallback pathway when one is configured.
-6. High-impact routing decisions require review and approval by an authorized operator.
-7. The system records the recommendation and the final disposition when that information is available.
+1. The system lists the candidate destinations that satisfy the safety, capacity, timing, and operational rules above.
+2. The system recommends the highest-priority candidate when at least one exists.
+3. Each recommendation shows the principal factors behind it: safety outcome, weight to move, remaining capacity, and handling time left.
+4. Food past its safe holding time is never recommended for human consumption, and allergen-flagged food is never recommended for external donation.
+5. If no feasible destination exists, the system reports that condition and identifies the configured fallback pathway; dispatching to that fallback always requires approval. If no fallback is configured, the system asks staff to handle the food manually.
+6. Routes meeting the approval rule are saved as PLANNED and are not DISPATCHED until a Staff Member approves them; the approver is recorded.
+7. The system records the recommendation (destination, units, weight, reason, candidates, and whether a fallback was used) and the final disposition: approved, delivered with delivered kilograms, rejected, or cancelled.
+8. A listing cannot have more than one live (non-cancelled) rescue dispatch. Concurrent requests for the same listing are serialized.
+9. Routing units from a listing that is still on sale removes them from the marketplace. Rejecting or cancelling the route returns them to sale if the pickup window is still open.
 
-**Verification Method:** Scenario-based tests, operational demonstrations, and review against food-handling and destination constraints.
+**Verification Method:** Automated rule tests (`lib/rescue-routing.test.ts`) for priority, safety, allergen, deadline, capacity, fallback, approval, and listing-quantity scenarios; operational demonstration of the plan → approve → deliver and the reject/cancel flows on `/merchant`; and review of the recorded ListingEvent audit trail. End-to-end results are pending entry in §4.1.
 
 #### REQ-FUNC-025 — Impact Estimator
 
@@ -1048,11 +1062,12 @@ flowchart LR
 ```
 
 ### 3.5 Design and Implementation
-The system shall continue to use a layered architecture with clear separation between user interface, service logic, and persistence. The current data model includes User, DiningHall, Food, Listing, Order, Notification, and AuthSession; future AI features can extend this model with prediction outputs, pricing policies, routing records, and impact metrics.
+The system shall continue to use a layered architecture with clear separation between user interface, service logic, and persistence. The current data model includes User, DiningHall, Food, Listing, Order, Notification, and AuthSession, plus RescueDestination, RescueDispatch, and ListingEvent for rescue routing; future AI features can extend this model with prediction outputs, pricing policies, and impact metrics.
 
 Key implementation units of the current prototype:
 
 - Conversational assistant: authenticated API route (`app/api/chat/route.ts`), local Ollama client with a tool-calling loop (`lib/ollama.ts`), bounded data-access tools (`lib/chat-tools.ts`), floating chat widget (`app/components/ChatWidget.tsx`).
+- Rescue routing: pure routing rules and listing helpers (`lib/rescue-routing.ts`, unit-tested in `lib/rescue-routing.test.ts`), database helpers for destination capacity and dispatch links (`lib/rescue-dispatch.ts`), server actions to plan, approve, complete, and cancel routes (`app/actions.ts`), and the rescue-routing panel on `/merchant`.
 - Image-based food selection: authenticated staff member endpoint (`app/api/food-image-match/route.ts`), client upload component (`app/components/FoodImageMatcher.tsx`), Python matcher (`app/scripts/classify_meal.py`) using `OLLAMA_VISION_MODEL` independently of the chat model.
 - Notifications: event triggers in server actions and the order-lifecycle module, a timed reminder endpoint (`app/api/notifications/route.ts`), a scheduler sidecar (`cron.js`) started together with the development server, and the notifications panel (`app/components/Notifications.tsx`).
 - Rule-based automatic discounts: the one-minute protected scheduler calls a deterministic pricing module (`lib/dynamic-pricing.ts`), which evaluates opted-in listings no more often than every 10 minutes and stores the last review reason.
@@ -1071,7 +1086,7 @@ Two AI components are operational in the current prototype, both running on loca
    - Voice input is transcribed locally and extracts clearly spoken catalog food, quantity, original price, discount, and pickup times; only non-null fields are filled and staff review and submit the listing.
    - Suggestions for descriptions and other unlisted fields remain future extensions.
 
-The current rule-based markdown policy (REQ-FUNC-026) is deterministic business logic, not an AI model. REQ-FUNC-023 remains a future advanced Dynamic Pricing Agent. The current AI components demonstrate the privacy-preserving, locally hosted approach that future predictive modules will follow. The future product direction adds the following AI modules:
+The current rule-based markdown policy (REQ-FUNC-026) and the current rescue router (REQ-FUNC-024) are deterministic business logic, not AI models. REQ-FUNC-023 remains a future advanced Dynamic Pricing Agent. The current AI components demonstrate the privacy-preserving, locally hosted approach that future predictive modules will follow. The future product direction adds the following AI modules:
 
 AI acceptance targets for the current locally hosted features (not yet measured): the chat evaluation set shall contain 40 questions across live listings, own orders, pickup codes, allergens, time, small talk, prompt injection, cross-user data requests, and prohibited order changes; run each three times. Allergen filtering and privacy cases require 100% correct outcomes, and other answers require at least 90% correctness. The image matcher shall be measured on labeled images in `docs/sample_food_images/` plus 20 additional labeled images, with ≥80% top-1 accuracy and 100% invalid-file rejection. Re-evaluation is required when `OLLAMA_MODEL` or `OLLAMA_VISION_MODEL` changes. The additional 20-image set and recorded evaluation results are not yet present.
 
@@ -1087,15 +1102,19 @@ AI acceptance targets for the current locally hosted features (not yet measured)
    - Uses contextual pricing to balance student savings, waste reduction, merchant outcomes, and fairness constraints.
    - The system shall enforce fairness caps to avoid price exploitation.
 
-4. Rescue Router (REQ-FUNC-024)
-   - Recommends the next best destination for unsold food, such as pantry, shelter, staff use, another campus kitchen, or composting.
-   - Optimizes routing and volunteer logistics in a circular-economy flow.
+4. Rescue Router (REQ-FUNC-024; rule-based core implemented)
+   - The current router recommends the next best destination (pantry, shelter, staff kitchen, or compost) with deterministic safety, capacity, timing, and priority rules.
+   - The rule-based core remains the authority for food-safety decisions. Future AI assistance may be layered around it without overriding its filters:
+     - plain-language explanations of each decision generated by the local model, with the current rule text as fallback;
+     - earlier rescue planning driven by the Predictive Surplus Engine (REQ-FUNC-021);
+     - learned ranking among destinations that already passed every rule, informed by completed deliveries;
+     - routing and volunteer logistics, including additional campus kitchens.
 
 5. Impact Estimator (REQ-FUNC-025)
    - Measures meals rescued, kilograms diverted, CO₂e avoided, water saved, and student savings.
    - Provides a real-time account of impact for each transaction or operational cycle.
 
-The current release's automatic discount behavior (REQ-FUNC-026) is a deterministic rule, not an AI agent. The advanced Dynamic Pricing Agent (REQ-FUNC-023) remains a future roadmap feature. Any future model-driven decision that materially affects pricing, donation destination, or large-scale operational commitments shall include human review.
+The current release's automatic discount behavior (REQ-FUNC-026) and rescue routing (REQ-FUNC-024) are deterministic rules, not AI agents. The advanced Dynamic Pricing Agent (REQ-FUNC-023) remains a future roadmap feature. Any future model-driven decision that materially affects pricing, donation destination, or large-scale operational commitments shall include human review.
 
 ## 4. Verification
 Verification is performed at two levels: the current prototype and the future AI extension. Current requirements are verified through functional validation, demonstration, and inspection. Future AI features shall be validated through model evaluation, operational review, and fairness checks in addition to functional testing.
@@ -1132,6 +1151,7 @@ Verification is performed at two levels: the current prototype and the future AI
 | REQ-FUNC-018 | Run the reminder sweep twice against controlled pickup windows | Each timed reminder sent exactly once, with food name and pickup code | — | — | Verification pending |
 | REQ-FUNC-019 | Ask listing, order, allergen, and time questions with and without a session | Live-data answers for signed-in users; HTTP 401 otherwise | — | — | Verification pending |
 | REQ-FUNC-020 | Upload a labeled meal photo and an invalid file | Correct catalog selection; invalid files rejected; manual fallback works | — | — | Verification pending |
+| REQ-FUNC-024 | Run routing rule scenarios; plan, approve, deliver, reject, and cancel routes on `/merchant` | Safety, allergen, capacity, deadline, and priority rules hold; approval enforced; no duplicate dispatch; disposition recorded | `lib/rescue-routing.test.ts` | 2026-11-21 | Unit rules: 15/15 pass; end-to-end verification pending |
 | REQ-FUNC-026 | Run rule scenarios for weak/strong demand, inventory, urgency, cadence, cap, and price snapshots | Only opted-in listings receive monotone 5-point markdowns; cap 80%; existing orders unchanged | — | — | Verification pending |
 
 ### 4.2 Non-Functional Verification
@@ -1159,6 +1179,7 @@ The following limitations are known and accepted for this phase; they are docume
 - The system currently uses EXPIRED and a full simulated refund for paid orders that miss their pickup window. A separate NO_SHOW state and a distinct refund policy remain a product decision.
 - Chat assistant answer quality depends on the locally hosted model; small models may occasionally summarize imperfectly even though the underlying data is correct.
 - The meal image matcher only selects from existing catalog foods; it does not create new catalog entries or fill other listing fields.
+- Rescue routing: the prototype has no separate operator role, so the Staff Member who plans a route can also approve it; the approver is recorded. Rescue destinations and their daily capacities are maintained through seed data. RescueDispatch has no listing column; the dispatch–listing link and the units taken off sale are stored in the RESCUE_ROUTE_CREATED ListingEvent. The allergen rule is deliberately conservative, and safe holding time is a single 120-minute value for all food categories.
 
 ## 5. Appendices
 ### Appendix A: Current Core Routes
@@ -1170,7 +1191,7 @@ The following limitations are known and accepted for this phase; they are docume
 | `/signup` | Student account creation |
 | `/student` | Legacy entry point; redirects to `/orders` |
 | `/orders` | Student workspace: available meals, reservations, and pickup codes |
-| `/merchant` | Staff Member dashboard for listing publication and pickup confirmation |
+| `/merchant` | Staff Member dashboard for listing publication, pickup confirmation, and rescue routing |
 | `/impact` | Staff Member impact report (rescued meals, savings) |
 | `/pay/[ref]` | Simulated payment page for a reservation |
 | `/api/chat` | Authenticated conversational-assistant endpoint |
@@ -1186,6 +1207,9 @@ The following limitations are known and accepted for this phase; they are docume
 - Order: reservation with simulated payment state, refund fields, pickup confirmation state, and per-order reminder flags (`reminderOpenSent`, `reminderCloseSent`).
 - Notification: in-app message addressed to one user, with read/unread state and timestamp.
 - AuthSession: hashed session token with expiry tracking.
+- RescueDestination: configured recovery or disposal destination (pantry, shelter, staff kitchen, compost, other) with optional daily capacity in kg and an active flag.
+- RescueDispatch: a routed batch of food from a dining hall to a destination, with weight, category, notes, and status (PLANNED, DISPATCHED, COMPLETED, CANCELLED).
+- ListingEvent: audit log of listing events, including the RESCUE_ROUTE_* recommendation and disposition records.
 
 ### Appendix C: Future AI Roadmap Summary
 

@@ -7,7 +7,9 @@ import { randomUUID, randomBytes } from "crypto";
 import { redirect } from "next/navigation";
 import { settleUnavailableOrders } from "@/lib/order-lifecycle";
 import { sendOrderPlacedNotifications } from "@/lib/notifications";
-import { evaluateRescueRoute } from "@/lib/rescue-routing";
+import { buildRescueRouteInput, evaluateRescueRoute, isListingOpen, isRescueCandidate } from "@/lib/rescue-routing";
+import { RESCUE_EVENT, getDispatchLink, hasOpenRescueDispatch, loadRescueDestinations, type RescueCreatedMetadata } from "@/lib/rescue-dispatch";
+import type { RescueDispatchStatus } from "@/app/generated/prisma/client";
 
 const PLATFORM_FEE_CENTS = 25;
 const SERVICE_FEE_CENTS = 25;
@@ -345,113 +347,201 @@ export async function confirmPayment(formData: FormData) {
   revalidatePath("/");
 }
 
-// RESCUE ROUTING ACTIONS
+// RESCUE ROUTING ACTIONS (REQ-FUNC-024)
 
-// Recommend a rescue route for a listing, based on its details and current inventory.
-export async function recommendRescueRoute(formData: FormData) {
-  const supervisor = await requireRole("SUPERVISOR");
-  if (!supervisor.diningHallId) return;
-
-  const listingId = String(formData.get("listingId") ?? "").trim();
-  const listing = await prisma.listing.findUnique({
-    where: { id: listingId },
-    include: { food: true, diningHall: true },
-  });
-
-  if (!listing || listing.diningHallId !== supervisor.diningHallId) return;
-
-  const destinations = await prisma.rescueDestination.findMany({
-    where: { active: true },
-    orderBy: { name: "asc" },
-  });
-
-  const recommendation = evaluateRescueRoute({
-    food: {
-      name: listing.food.name,
-      category: listing.food.category,
-      unitWeightKg: listing.food.unitWeightKg,
-      safeForConsumption: true,
-      safeForDonation: listing.food.allergens.length === 0,
-    },
-    quantityRemaining: listing.quantityRemaining,
-    estimatedKg: listing.quantityRemaining * (listing.food.unitWeightKg ?? 0.65),
-    minutesUntilDeadline: Math.max(0, (listing.pickupWindowEnd.getTime() - Date.now()) / 60000),
-    destinations: destinations.map((destination) => ({
-      id: destination.id,
-      name: destination.name,
-      type: destination.type,
-      address: destination.address,
-      capacityKg: destination.capacityKg,
-      active: destination.active,
-    })),
-  });
-
-  const destinationId = recommendation.recommendedDestination?.id ?? recommendation.fallbackDestination?.id ?? null;
-  if (!destinationId) {
-    await prisma.listingEvent.create({
-      data: {
-        listingId: listing.id,
-        eventType: "RESCUE_ROUTING_NO_DESTINATION",
-        metadata: {
-          recommendation: recommendation.reason,
-          explanation: recommendation.explanation,
-          requiresApproval: recommendation.requiresApproval,
-          status: recommendation.status,
-        },
-      },
-    });
-    return;
-  }
-
-  const destinationName = destinations.find((destination) => destination.id === destinationId)?.name ?? "Unassigned destination";
-  const dispatch = await prisma.rescueDispatch.create({
-    data: {
-      diningHallId: listing.diningHallId,
-      destinationId,
-      category: listing.food.category,
-      dispatchedAt: new Date(),
-      kgRedistributed: recommendation.estimatedKg,
-      status: recommendation.requiresApproval ? "PLANNED" : "DISPATCHED",
-      notes: `${recommendation.reason} ${recommendation.explanation}`,
-    },
-  });
-
-  await prisma.listingEvent.create({
-    data: {
-      listingId: listing.id,
-      eventType: recommendation.requiresApproval ? "RESCUE_ROUTING_RECOMMENDED" : "RESCUE_ROUTING_DISPATCHED",
-      metadata: {
-        recommendation: recommendation.reason,
-        destinationId,
-        destinationName,
-        requiresApproval: recommendation.requiresApproval,
-        status: recommendation.status,
-      },
-    },
-  });
-
+function revalidateRescueViews() {
   revalidatePath("/merchant");
   revalidatePath("/");
 }
 
-// Approve a previously recommended rescue route dispatch.
+// Evaluate the rescue route for a listing and record it as a dispatch.
+// Routes that need approval are saved as PLANNED; the rest go straight to DISPATCHED.
+export async function recommendRescueRoute(formData: FormData) {
+  const supervisor = await requireRole("SUPERVISOR");
+  if (!supervisor.diningHallId) return;
+  const diningHallId = supervisor.diningHallId;
+
+  const listingId = String(formData.get("listingId") ?? "").trim();
+  if (!listingId) return;
+  const now = new Date();
+  await settleUnavailableOrders(now);
+
+  await prisma.$transaction(async (tx) => {
+    // Lock the listing so two clicks cannot create two dispatches or race a student claim.
+    await tx.$queryRaw`SELECT "id" FROM "Listing" WHERE "id" = ${listingId} FOR UPDATE`;
+    const listing = await tx.listing.findFirst({
+      where: { id: listingId, diningHallId },
+      include: { food: true, orders: { select: { status: true, quantity: true } } },
+    });
+    if (!listing || !isRescueCandidate(listing, now)) return;
+    if (await hasOpenRescueDispatch(tx, listing.id)) return;
+
+    const destinations = await loadRescueDestinations(tx, now);
+    const input = buildRescueRouteInput(listing, destinations, now);
+    const recommendation = evaluateRescueRoute(input);
+    const target = recommendation.recommendedDestination ?? recommendation.fallbackDestination;
+
+    if (!target) {
+      await tx.listingEvent.create({
+        data: {
+          listingId: listing.id,
+          eventType: RESCUE_EVENT.NO_DESTINATION,
+          metadata: {
+            units: input.quantityRemaining,
+            estimatedKg: recommendation.estimatedKg,
+            reason: recommendation.reason,
+            explanation: recommendation.explanation,
+            requestedBy: supervisor.id,
+          },
+        },
+      });
+      return;
+    }
+
+    const dispatchStatus = recommendation.requiresApproval ? "PLANNED" : "DISPATCHED";
+    const usedFallback = !recommendation.recommendedDestination;
+    const dispatch = await tx.rescueDispatch.create({
+      data: {
+        diningHallId,
+        destinationId: target.id,
+        category: listing.food.category,
+        dispatchedAt: now,
+        kgRedistributed: Math.round(recommendation.estimatedKg * 100) / 100,
+        status: dispatchStatus,
+        notes: `${input.quantityRemaining} × ${listing.food.name}. ${recommendation.reason} ${recommendation.explanation}`,
+      },
+    });
+
+    // Units routed from a listing that is still on sale leave the marketplace.
+    let unitsWithdrawnFromSale = 0;
+    if (isListingOpen(listing, now) && listing.quantityRemaining > 0) {
+      unitsWithdrawnFromSale = listing.quantityRemaining;
+      await tx.listing.update({ where: { id: listing.id }, data: { quantityRemaining: 0, status: "SOLD_OUT" } });
+    }
+
+    const metadata: RescueCreatedMetadata = {
+      dispatchId: dispatch.id,
+      destinationId: target.id,
+      destinationName: target.name,
+      units: input.quantityRemaining,
+      unitsWithdrawnFromSale,
+      estimatedKg: recommendation.estimatedKg,
+      dispatchStatus,
+      recommendationStatus: recommendation.status,
+      usedFallback,
+      requiresApproval: recommendation.requiresApproval,
+      reason: recommendation.reason,
+      explanation: recommendation.explanation,
+      candidateDestinationIds: recommendation.candidateDestinations.map((d) => d.id),
+    };
+    await tx.listingEvent.create({ data: { listingId: listing.id, eventType: RESCUE_EVENT.CREATED, metadata } });
+  });
+
+  revalidateRescueViews();
+}
+
+// Load a dispatch of the supervisor's hall that is in one of the allowed states.
+async function findHallDispatch(dispatchId: string, diningHallId: string, statuses: RescueDispatchStatus[]) {
+  if (!dispatchId) return null;
+  return prisma.rescueDispatch.findFirst({ where: { id: dispatchId, diningHallId, status: { in: statuses } } });
+}
+
+// Approve a PLANNED rescue dispatch.
 export async function approveRescueRoute(formData: FormData) {
   const supervisor = await requireRole("SUPERVISOR");
   if (!supervisor.diningHallId) return;
-
-  const dispatchId = String(formData.get("dispatchId") ?? "").trim();
-  const dispatch = await prisma.rescueDispatch.findFirst({
-    where: { id: dispatchId, diningHallId: supervisor.diningHallId, status: "PLANNED" },
-    include: { destination: true },
-  });
-
+  const dispatch = await findHallDispatch(String(formData.get("dispatchId") ?? "").trim(), supervisor.diningHallId, ["PLANNED"]);
   if (!dispatch) return;
 
-  await prisma.rescueDispatch.update({
-    where: { id: dispatch.id },
-    data: { status: "DISPATCHED", notes: `${dispatch.notes ?? ""} Approved by ${supervisor.name ?? supervisor.email}.` },
+  const approver = supervisor.name ?? supervisor.email;
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.rescueDispatch.updateMany({
+      where: { id: dispatch.id, status: "PLANNED" },
+      data: { status: "DISPATCHED", dispatchedAt: new Date(), notes: `${dispatch.notes ?? ""} Approved by ${approver}.`.trim() },
+    });
+    if (!updated.count) return;
+    const link = await getDispatchLink(tx, dispatch.id);
+    if (link) {
+      await tx.listingEvent.create({
+        data: { listingId: link.listingId, eventType: RESCUE_EVENT.APPROVED, metadata: { dispatchId: dispatch.id, approvedBy: supervisor.id } },
+      });
+    }
   });
 
-  revalidatePath("/merchant");
-  revalidatePath("/");
+  revalidateRescueViews();
+}
+
+// Record the final disposition: the food reached the destination.
+export async function completeRescueRoute(formData: FormData) {
+  const supervisor = await requireRole("SUPERVISOR");
+  if (!supervisor.diningHallId) return;
+  const dispatch = await findHallDispatch(String(formData.get("dispatchId") ?? "").trim(), supervisor.diningHallId, ["DISPATCHED"]);
+  if (!dispatch) return;
+
+  const deliveredRaw = String(formData.get("deliveredKg") ?? "").trim();
+  const deliveredKg = deliveredRaw === "" ? dispatch.kgRedistributed : Number(deliveredRaw);
+  if (deliveredKg != null && (!Number.isFinite(deliveredKg) || deliveredKg < 0)) return;
+
+  const who = supervisor.name ?? supervisor.email;
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.rescueDispatch.updateMany({
+      where: { id: dispatch.id, status: "DISPATCHED" },
+      data: {
+        status: "COMPLETED",
+        kgRedistributed: deliveredKg,
+        notes: `${dispatch.notes ?? ""} Delivery confirmed by ${who}${deliveredKg != null ? ` (${deliveredKg} kg)` : ""}.`.trim(),
+      },
+    });
+    if (!updated.count) return;
+    const link = await getDispatchLink(tx, dispatch.id);
+    if (link) {
+      await tx.listingEvent.create({
+        data: { listingId: link.listingId, eventType: RESCUE_EVENT.COMPLETED, metadata: { dispatchId: dispatch.id, deliveredKg, confirmedBy: supervisor.id } },
+      });
+    }
+  });
+
+  revalidateRescueViews();
+}
+
+// Reject a PLANNED route or cancel a DISPATCHED one. Units taken off sale go back
+// to the marketplace if the pickup window is still open.
+export async function cancelRescueRoute(formData: FormData) {
+  const supervisor = await requireRole("SUPERVISOR");
+  if (!supervisor.diningHallId) return;
+  const dispatch = await findHallDispatch(String(formData.get("dispatchId") ?? "").trim(), supervisor.diningHallId, ["PLANNED", "DISPATCHED"]);
+  if (!dispatch) return;
+
+  const now = new Date();
+  const who = supervisor.name ?? supervisor.email;
+  const verb = dispatch.status === "PLANNED" ? "Rejected" : "Cancelled";
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.rescueDispatch.updateMany({
+      where: { id: dispatch.id, status: dispatch.status },
+      data: { status: "CANCELLED", notes: `${dispatch.notes ?? ""} ${verb} by ${who}.`.trim() },
+    });
+    if (!updated.count) return;
+
+    const link = await getDispatchLink(tx, dispatch.id);
+    if (!link) return;
+
+    let unitsRestored = 0;
+    if (link.created.unitsWithdrawnFromSale > 0) {
+      const restored = await tx.listing.updateMany({
+        where: { id: link.listingId, status: { in: ["ACTIVE", "SOLD_OUT"] }, pickupWindowEnd: { gt: now } },
+        data: { quantityRemaining: { increment: link.created.unitsWithdrawnFromSale }, status: "ACTIVE" },
+      });
+      if (restored.count) unitsRestored = link.created.unitsWithdrawnFromSale;
+    }
+
+    await tx.listingEvent.create({
+      data: {
+        listingId: link.listingId,
+        eventType: RESCUE_EVENT.CANCELLED,
+        metadata: { dispatchId: dispatch.id, previousStatus: dispatch.status, unitsRestored, cancelledBy: supervisor.id },
+      },
+    });
+  });
+
+  revalidateRescueViews();
 }

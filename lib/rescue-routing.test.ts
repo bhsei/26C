@@ -1,6 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { evaluateRescueRoute, type RescueDestinationCandidate } from "./rescue-routing";
+// Run with: npx tsx --test lib/rescue-routing.test.ts
+import {
+  buildRescueRouteInput,
+  evaluateRescueRoute,
+  isRescueCandidate,
+  rescuableUnits,
+  type RescueDestinationCandidate,
+  type RescueListing,
+} from "./rescue-routing";
 
 const baseDestinations: RescueDestinationCandidate[] = [
   { id: "d1", name: "Campus Pantry", type: "PANTRY", address: "A", capacityKg: 30, active: true },
@@ -22,7 +30,7 @@ test("prefers highest-priority eligible destination", () => {
   assert.equal(result.recommendedDestination?.type, "PANTRY");
 });
 
-test("unsafe-for-donation food is not routed to human-facing destinations", () => {
+test("unsafe-for-donation food stays in-house instead of going to external donation", () => {
   const result = evaluateRescueRoute({
     food: { name: "Allergen Mix", safeForConsumption: true, safeForDonation: false, unitWeightKg: 0.6 },
     quantityRemaining: 10,
@@ -32,7 +40,34 @@ test("unsafe-for-donation food is not routed to human-facing destinations", () =
   });
 
   assert.equal(result.status, "RECOMMENDED");
+  assert.equal(result.recommendedDestination?.type, "STAFF_KITCHEN");
+  assert.ok(result.candidateDestinations.every((d) => d.type !== "PANTRY" && d.type !== "SHELTER"));
+});
+
+test("food not safe for consumption only goes to compost", () => {
+  const result = evaluateRescueRoute({
+    food: { name: "Old Curry", safeForConsumption: false, safeForDonation: true },
+    quantityRemaining: 4,
+    estimatedKg: 2,
+    minutesUntilDeadline: 120,
+    destinations: baseDestinations,
+  });
+
   assert.equal(result.recommendedDestination?.type, "COMPOST");
+  assert.deepEqual(result.candidateDestinations.map((d) => d.type), ["COMPOST"]);
+});
+
+test("zero or negative deadline is treated as expired, not as the default", () => {
+  for (const minutesUntilDeadline of [0, -30]) {
+    const result = evaluateRescueRoute({
+      food: { name: "Rice", safeForConsumption: true, safeForDonation: true },
+      quantityRemaining: 4,
+      estimatedKg: 2,
+      minutesUntilDeadline,
+      destinations: baseDestinations,
+    });
+    assert.equal(result.recommendedDestination?.type, "COMPOST", `deadline ${minutesUntilDeadline}`);
+  }
 });
 
 test("short deadlines filter out slower operational routes", () => {
@@ -77,4 +112,98 @@ test("high-impact recommendations require approval", () => {
 
   assert.equal(result.status, "RECOMMENDED");
   assert.equal(result.requiresApproval, true);
+});
+
+test("small compost routes do not need approval", () => {
+  const result = evaluateRescueRoute({
+    food: { name: "Peels", safeForConsumption: false },
+    quantityRemaining: 2,
+    estimatedKg: 1,
+    minutesUntilDeadline: 10,
+    destinations: baseDestinations,
+  });
+
+  assert.equal(result.recommendedDestination?.type, "COMPOST");
+  assert.equal(result.requiresApproval, false);
+});
+
+test("an over-capacity fallback is reported and always requires approval", () => {
+  const result = evaluateRescueRoute({
+    food: { name: "Stew", safeForConsumption: true, safeForDonation: true },
+    quantityRemaining: 40,
+    estimatedKg: 20,
+    minutesUntilDeadline: 120,
+    destinations: [
+      { id: "h1", name: "Tiny Pantry", type: "PANTRY", address: null, capacityKg: 5, active: true },
+      { id: "c1", name: "Small Compost", type: "COMPOST", address: null, capacityKg: 10, active: true },
+    ],
+  });
+
+  assert.equal(result.status, "NO_FEASIBLE_DESTINATION");
+  assert.equal(result.fallbackDestination?.id, "c1");
+  assert.equal(result.requiresApproval, true);
+});
+
+test("fallback prefers a disposal path with enough capacity", () => {
+  const result = evaluateRescueRoute({
+    food: { name: "Rice", safeForConsumption: true, safeForDonation: true },
+    quantityRemaining: 4,
+    estimatedKg: 2,
+    minutesUntilDeadline: 120,
+    destinations: [
+      ...baseDestinations,
+      { id: "o1", name: "Tiny Other", type: "OTHER", address: null, capacityKg: 1, active: true },
+      { id: "o2", name: "Big Other", type: "OTHER", address: null, capacityKg: 100, active: true },
+    ],
+  });
+
+  assert.equal(result.recommendedDestination?.type, "PANTRY");
+  assert.equal(result.fallbackDestination?.id, "d4");
+});
+
+// --- listing helpers -------------------------------------------------------
+
+const now = new Date("2026-11-21T20:00:00Z");
+const minutesFromNow = (m: number) => new Date(now.getTime() + m * 60000);
+
+function listing(overrides: Partial<RescueListing> = {}): RescueListing {
+  return {
+    status: "ACTIVE",
+    quantityTotal: 10,
+    quantityRemaining: 4,
+    pickupWindowEnd: minutesFromNow(60),
+    food: { name: "Veg Rice", category: "COOKED_VEGETARIAN", unitWeightKg: 0.5, allergens: [] },
+    orders: [
+      { status: "PICKED_UP", quantity: 3 },
+      { status: "RESERVED", quantity: 3 },
+    ],
+    ...overrides,
+  };
+}
+
+test("open listings only route unclaimed units", () => {
+  assert.equal(rescuableUnits(listing(), now), 4);
+});
+
+test("closed listings route everything that was not picked up", () => {
+  const closed = listing({ status: "EXPIRED", pickupWindowEnd: minutesFromNow(-30) });
+  assert.equal(rescuableUnits(closed, now), 7);
+  assert.equal(isRescueCandidate(closed, now), true);
+});
+
+test("listings closed beyond the lookback window are not offered", () => {
+  const old = listing({ status: "EXPIRED", pickupWindowEnd: minutesFromNow(-7 * 60) });
+  assert.equal(isRescueCandidate(old, now), false);
+});
+
+test("expired listing past safe holding time is routed to compost end-to-end", () => {
+  const stale = listing({ status: "EXPIRED", pickupWindowEnd: minutesFromNow(-150) });
+  const input = buildRescueRouteInput(stale, baseDestinations, now);
+  assert.equal(input.food.safeForConsumption, false);
+  assert.equal(evaluateRescueRoute(input).recommendedDestination?.type, "COMPOST");
+});
+
+test("allergen-flagged food is kept off external donation end-to-end", () => {
+  const input = buildRescueRouteInput(listing({ food: { name: "Pesto Pasta", category: null, unitWeightKg: 0.5, allergens: ["TREE_NUTS"] } }), baseDestinations, now);
+  assert.equal(evaluateRescueRoute(input).recommendedDestination?.type, "STAFF_KITCHEN");
 });
