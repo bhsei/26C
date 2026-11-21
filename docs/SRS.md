@@ -1,13 +1,13 @@
 # Software Requirements Specification
 ## For SecondHelping
 
-Version 1.4
+Version 1.5
 
 Prepared by Bianca Zavadisk, Geming Wu, Gabriel Silva, Marwen Jadlaoui and Zamo Rzgar
 
 Beihang University · Software Engineering · Team: The Debuggers
 
-2026/10/28
+2026/11/21
 
 ## Table of Contents
 * [1. Introduction](#1-introduction)
@@ -47,17 +47,18 @@ Beihang University · Software Engineering · Team: The Debuggers
 | Peer review remediation | 2026/11/08 | Clarified lifecycle rules, security and privacy constraints, pricing, reminders, allergen behavior, measurable quality targets, verification status, roadmap priority, and design references; aligned implemented fixes with the prototype | 1.2 |
 | Voice listing input | 2026/11/08 | Extended REQ-FUNC-020 with local voice capture, speech transcription, and selective extraction of explicitly spoken listing fields; updated setup and verification guidance | 1.3 |
 | Dynamic pricing agent | 2026/11/16 | Added optional, scheduled listing-wide discount adjustments using time remaining, inventory, paid sell-through, recent demand, a step size, and a maximum discount cap | 1.4 |
+| Rescue routing and architecture alignment | 2026/11/21 | Documented the implemented rule-based rescue router (REQ-FUNC-024: routing rules, approval, audit trail, unit-test evidence). Aligned the specification with the implementation and with the new Software Architecture Document: marked REQ-FUNC-025 as partially implemented, with unit-test evidence; added voice input, automatic discounts, rescue routing, and impact estimation to the scope, product functions, and apportioning; corrected the software interfaces (speech-recognition model, Pillow dependency), routes, security rules, data-model appendix, and setup commands; referenced the SAD for design details; recorded the known nonconformances found by the SAD conformance review | 1.5 |
 
 ## 1. Introduction
-SecondHelping is a campus food-recovery and food-circulation application designed to reduce surplus food waste while helping students access low-cost meals before dining halls close. The current prototype is a reactive marketplace in which staff members post closing-bag listings and students reserve remaining meals. It includes a simulated payment and refund lifecycle, in-app notifications with timed pickup reminders, a conversational AI assistant that answers questions over live marketplace data, and image-based meal recognition for staff members. The future product direction extends the system from a simple rescue marketplace into an autonomous campus food-circulation network that predicts surplus before it happens, prevents avoidable waste, routes remaining food to its next best use, and measures environmental and social impact.
+SecondHelping is a campus food-recovery and food-circulation application designed to reduce surplus food waste while helping students access low-cost meals before dining halls close. The current prototype is a reactive marketplace in which staff members post closing-bag listings and students reserve remaining meals. It includes a simulated payment and refund lifecycle, in-app notifications with timed pickup reminders, a conversational AI assistant that answers questions over live marketplace data, image- and voice-based listing assistance for staff members, optional rule-based automatic discounts, a rule-based rescue router for unsold food, and impact reporting with estimated environmental indicators. The future product direction extends the system from a simple rescue marketplace into an autonomous campus food-circulation network that predicts surplus before it happens, prevents avoidable waste, routes remaining food to its next best use, and measures environmental and social impact.
 
 ### 1.1 Document Purpose
 This Software Requirements Specification (SRS) describes the functionality and constraints of SecondHelping at two maturity levels: the current operational prototype and the planned future AI-driven system. The document is intended for product stakeholders, developers, testers, peer reviewers, and campus operators who need a shared understanding of what the system must do and how future improvements connect to the present product. It defines the product behavior, constraints, and verification expectations without describing a single implementation strategy.
 
 ### 1.2 Product Scope
-The current system scope includes role-based login, student browsing, dining-hall listing creation, image and voice listing assistance, optional rule-based automatic discounts, reservation flow with simulated payment and refunds, pickup confirmation, in-app notifications with timed pickup reminders, a conversational AI assistant, and summary reporting. The planned future scope adds predictive surplus forecasting, prep optimization, expanded multimodal listing assistance, an advanced AI-driven pricing agent, route-based food redistribution, and environmental impact estimation. The system may therefore evolve from a closing-bag marketplace into a broader campus circular-economy platform.
+The current system scope includes role-based login, student browsing, dining-hall listing creation, image and voice listing assistance, optional rule-based automatic discounts, reservation flow with simulated payment and refunds, pickup confirmation, in-app notifications with timed pickup reminders, a conversational AI assistant, rule-based rescue routing of unsold food, summary reporting, and estimated environmental impact indicators. The planned future scope adds predictive surplus forecasting, prep optimization, expanded multimodal listing assistance, an advanced AI-driven pricing agent, AI-assisted rescue planning and logistics, and fully documented environmental impact estimation. The system may therefore evolve from a closing-bag marketplace into a broader campus circular-economy platform.
 
-The in-scope features for the near term are: student and staff member user accounts, listing publication, allergen-aware filtering, order management, simulated payment and refunds, pickup code confirmation, in-app notifications and pickup reminders, the AI chat assistant, image-based food selection for staff members, and operational metric dashboards. Out-of-scope items for the current phase include integrated real payment processing, push or email notification channels, full supply-chain optimization, and advanced autonomous decision-making across multiple campuses.
+The in-scope features for the near term are: student and staff member user accounts, listing publication, allergen-aware filtering, order management, simulated payment and refunds, pickup code confirmation, in-app notifications and pickup reminders, the AI chat assistant, image- and voice-based listing assistance for staff members, rule-based automatic discounts, rule-based rescue routing, and operational and impact dashboards. Out-of-scope items for the current phase include integrated real payment processing, push or email notification channels, full supply-chain optimization, and advanced autonomous decision-making across multiple campuses.
 
 ### 1.3 Definitions, Acronyms, and Abbreviations
 
@@ -66,6 +67,7 @@ The in-scope features for the near term are: student and staff member user accou
 | AI | Artificial intelligence used for forecasting, decision support, the conversational assistant, and meal image recognition. |
 | Closing Bag | A discounted offer of surplus food published by a dining hall near closing time. |
 | Dining Hall | A campus food-service location that publishes meal listings and manages food recovery. |
+| Emission Factor | A documented conversion from one kilogram of diverted food of a given category to avoided CO₂e emissions, saved water, and saved land, valid from a stated date. |
 | Guest | An unauthenticated visitor who can browse the public overview and marketplace preview. |
 | Listing | A meal or closing-bag offer containing information such as price, quantity, allergens, and pickup window. |
 | LLM | Large Language Model; the assistant runs a local model through Ollama. |
@@ -73,6 +75,8 @@ The in-scope features for the near term are: student and staff member user accou
 | Ollama | A local model server that hosts the LLM and vision model used by the AI features, avoiding external API dependencies. |
 | Order | A reservation created when a student claims a listing, with simulated payment and pickup states. |
 | Pickup Code | A unique code that supports meal validation when a reservation is picked up. |
+| Rescue Destination | A configured recovery or disposal pathway for unsold food (pantry, shelter, staff kitchen, compost, or other) with an optional daily capacity. |
+| SAD | Software Architecture Document (`docs/SAD.md`), which describes how the system realizes this specification. |
 | SRS | Software Requirements Specification. |
 | Student | A user role that browses available meals, reserves food, and collects pickup codes. |
 | Staff Member | A user role responsible for listing meals, confirming pickup, and monitoring operations; stored as `SUPERVISOR` in the current database. |
@@ -89,13 +93,14 @@ The in-scope features for the near term are: student and staff member user accou
 | PostgreSQL Documentation | PostgreSQL Global Development Group | Current | Informative | https://www.postgresql.org/docs/ |
 | Ollama Documentation | Ollama | Current | Informative | https://ollama.com |
 | Project Repository | The Debuggers | Current | Internal | https://github.com/bhsei/26C |
+| Software Architecture Document (SAD) | The Debuggers | v1.1, 2026/11/21 | Internal | `docs/SAD.md` |
 
 ### 1.5 Document Overview
-Section 2 describes the product context and expected evolution from a reactive marketplace to a predictive and autonomous food-circulation system. Section 3 defines the requirements for current functionality and future AI-driven enhancements. Section 4 specifies verification criteria and a traceability table for implemented requirements, while Section 5 includes supporting appendices and operational notes.
+Section 2 describes the product context and expected evolution from a reactive marketplace to a predictive and autonomous food-circulation system. Section 3 defines the requirements for current functionality and future AI-driven enhancements. Section 4 specifies verification criteria and a traceability table for implemented requirements, while Section 5 includes supporting appendices and operational notes. The Software Architecture Document (§1.4) describes the architecture that realizes these requirements, including its design rationale, runtime behavior, data model, and an architecture conformance review.
 
 ## 2. Product Overview
 ### 2.1 Product Perspective
-SecondHelping is a new campus food-recovery product designed to tackle the operational problem of surplus food near closing time. In its current form, it is a web application that helps dining-hall staff publish discounted meals and allows students to find and reserve food before it is discarded. Students receive in-app reminders before their pickup windows open and close. A conversational AI assistant, running on a locally hosted language model, helps signed-in users query live marketplace data in natural language, and a local vision model helps staff members identify dishes from photos when publishing listings. The next product direction reframes the system as an autonomous campus food-circulation network that predicts surplus before it happens, reduces avoidable waste, reroutes what remains, and tracks societal and environmental impact.
+SecondHelping is a new campus food-recovery product designed to tackle the operational problem of surplus food near closing time. In its current form, it is a web application that helps dining-hall staff publish discounted meals and allows students to find and reserve food before it is discarded. Students receive in-app reminders before their pickup windows open and close. A conversational AI assistant, running on a locally hosted language model, helps signed-in users query live marketplace data in natural language, a local vision model helps staff members identify dishes from photos, and a local speech model lets them describe a listing by voice. Deterministic rules support optional automatic discounts and the routing of unsold food, and an impact estimator turns confirmed pickups into estimated environmental benefits. The next product direction reframes the system as an autonomous campus food-circulation network that predicts surplus before it happens, reduces avoidable waste, reroutes what remains, and tracks societal and environmental impact.
 
 The system depends on a central relational database, a web-based interface, and role-based operational workflows. The current prototype is self-contained and uses Next.js, Prisma, and PostgreSQL, plus a local Ollama server for the AI features. Future AI modules can be layered on top of that foundation using prediction, optimization, multimodal input processing, dynamic pricing, and routing logic without replacing the underlying transaction infrastructure.
 
@@ -112,16 +117,19 @@ The current product provides the following core functions:
 - In-app notifications for order events and timed reminders before pickup windows open and close.
 - AI chat assistant that answers questions about meals, dining halls, orders, pickup codes, and general topics using live marketplace data through local tool calling.
 - Image-based suggestions for existing Food catalog entries during listing creation.
-- Metrics for rescued meals, saved money, and order totals.
+- Voice-based listing input that transcribes a short recording locally and fills only clearly spoken form fields.
+- Optional rule-based automatic discounts for listings whose demand lags, capped at an 80% discount.
+- Rule-based rescue routing of unsold food to a pantry, shelter, staff kitchen, or compost, with staff approval for high-impact routes.
+- Metrics for rescued meals, saved money, and order totals, plus estimated CO₂e, water, and land savings for picked-up orders.
 
 The planned future product provides additional functions:
 
 - Predictive surplus forecasting from sales, menu patterns, weather, and campus events.
 - Prep optimization to reduce overproduction before excess food appears.
-- Expanded multimodal listing creation from photos or voice input, including suggestions for fields beyond the existing image-to-food catalog selection.
-- Dynamic pricing based on inventory, time left, and fairness rules.
-- Rescue routing to food banks, shelters, staff meal channels, or compost streams.
-- Real-time impact estimation for meals diverted, carbon avoided, and water saved.
+- Expanded multimodal listing creation from photos or voice input, including suggestions for fields beyond the current catalog selection and spoken form fields.
+- AI-driven dynamic pricing based on inventory, time left, and fairness rules, beyond the current rule-based markdowns.
+- Forecast-driven rescue planning, learned ranking among eligible destinations, and volunteer logistics, building on the current rule-based router.
+- Continuous impact estimation with documented emission factors and waste and social-impact indicators, building on the current estimator.
 
 ### 2.3 Product Constraints
 The system shall operate under the following constraints:
@@ -146,8 +154,8 @@ The primary user groups are:
 The current and future product depends on the following assumptions:
 
 - PostgreSQL remains available for persistent application data.
-- A local Ollama server with a tool-capable chat model (default `qwen2:7b`) and a vision model (default `qwen2.5vl:3b`) is available for the AI features; when it is unavailable, the rest of the marketplace continues to function.
-- The notification reminder scheduler runs alongside the web application in the local deployment environment.
+- A local Ollama server with a tool-capable chat model (default `qwen2:7b`), a vision model (default `qwen2.5vl:3b`), and a speech-recognition model (default `frozenlab/qwen3-asr:0.6b`) is available for the AI features; when it is unavailable, the rest of the marketplace continues to function.
+- The local scheduler, which triggers settlement, automatic discounts, and pickup reminders, runs alongside the web application in the local deployment environment.
 - The project continues to operate in a campus dining environment with a manageable number of dining halls and user roles.
 - Product data such as menu records, sales history, ingredient usage, and reservation behavior will be available for forecasting and analytics when the AI features are introduced.
 - Staff Member assignments and dining-hall mappings remain valid for listing publication and pickup operations.
@@ -160,19 +168,19 @@ If these assumptions fail, predictive features and routing decisions may need ma
 | Requirement area | Current version | Future version |
 |------------------|-----------------|----------------|
 | User access | Login, signup, role-based route guards | Same plus privilege-aware AI operations |
-| Listing management | Publish, view, filter, reserve | AI-assisted listing creation and optimization |
+| Listing management | Publish, view, filter, reserve; image and voice assistance that pre-fills the listing form | Expanded AI-assisted listing creation and optimization |
 | Inventory control | Quantity tracking and reservation logic | Predictive prep reduction and surplus forecasting |
-| Pricing | Fixed discount model | Dynamic, fairness-constrained pricing |
+| Pricing | Fixed discount, with optional rule-based automatic markdowns (REQ-FUNC-026) | AI-driven, fairness-constrained dynamic pricing (REQ-FUNC-023) |
 | Payments | Simulated payment, automatic refunds | Real payment provider integration |
 | Notifications | In-app messages and timed pickup reminders | Push, email, and preference-based channels |
 | Routing | Rule-based rescue router for pantry, shelter, staff-kitchen, and compost paths, with operator approval | Forecast-driven rescue planning, learned ranking among eligible destinations, and volunteer logistics |
-| Analytics | Saved meals and order totals | CO₂e, water, waste, and social-impact calculations |
+| Analytics | Saved meals and order totals; estimated CO₂e, water, and land savings from the impact estimator (partial, REQ-FUNC-025) | Documented emission factors, continuous synchronization, and waste and social-impact indicators |
 | Assistant | Tool-based chat over live marketplace data (local LLM) | Multimodal listing copilot and personalized guidance |
 
 ## 3. Requirements
 ### 3.1 External Interfaces
 #### 3.1.1 User Interfaces
-The application shall provide browser-based web interfaces for all user roles. The current system includes a public overview page, login, signup, student marketplace and orders views, a dining-hall dashboard, a simulated payment page, an impact report, a notifications bell with unread-count badge, a rescue-routing panel on the dining-hall dashboard, and a floating chat assistant for signed-in users. Future interfaces may include AI dashboards, forecasting outputs, and pricing recommendation panels.
+The application shall provide browser-based web interfaces for all user roles. The current system includes a public overview page, login, signup, student marketplace and orders views, a dining-hall dashboard with image and voice listing assistants and a rescue-routing panel, a simulated payment page, an impact report, a community-impact panel on the overview page, a notifications bell with unread-count badge, and a floating chat assistant for signed-in users. Future interfaces may include AI dashboards, forecasting outputs, and pricing recommendation panels.
 
 - The login page shall allow an authenticated user to access the correct dashboard.
 - The signup page shall create a student account with valid email and password validation.
@@ -192,13 +200,13 @@ The application shall integrate with the following technical interfaces:
 - PostgreSQL for persistent data storage.
 - Prisma ORM for schema management and data access.
 - Browser client interfaces for form actions and user interaction.
-- Local Ollama model server (chat API with tool calling and image input) powering the conversational assistant and meal image matching; default models `qwen2:7b` (chat) and `qwen2.5vl:3b` (vision), configurable via environment variables.
-- Local Python 3 runtime (standard library only) for the meal image matching script.
+- Local Ollama model server (chat API with tool calling, image and audio input, and schema-constrained JSON output) powering the conversational assistant, meal image matching, and voice listing input; default models `qwen2:7b` (chat and listing-field extraction), `qwen2.5vl:3b` (vision), and `frozenlab/qwen3-asr:0.6b` (speech recognition), configurable via environment variables.
+- Local Python 3.10+ runtime with the Pillow imaging library for the meal image matching script, which resizes images before inference.
 - Optional future AI services for forecasting, multimodal input analysis, pricing optimization, and routing decisions.
 
 ### 3.2 Functional Requirements
 
-The catalog contains **26 functional requirements**: REQ-FUNC-001 through REQ-FUNC-020, REQ-FUNC-024, and REQ-FUNC-026 describe the current prototype; REQ-FUNC-021 through REQ-FUNC-023 and REQ-FUNC-025 describe the planned future system. Priority ranks importance within the roadmap; status independently indicates delivery phase. Implemented requirements without recorded verification evidence are treated as **Implemented (verification pending)** until the evidence table is completed. The repository has automated unit tests only for selected rule modules (for example, rescue routing); implementation status alone is not evidence of verification.
+The catalog contains **26 functional requirements**: REQ-FUNC-001 through REQ-FUNC-020, REQ-FUNC-024, and REQ-FUNC-026 describe the current prototype; REQ-FUNC-025 is partially implemented; REQ-FUNC-021 through REQ-FUNC-023 describe the planned future system. Priority ranks importance within the roadmap; status independently indicates delivery phase. Implemented requirements without recorded verification evidence are treated as **Implemented (verification pending)** until the evidence table is completed. The repository has automated unit tests only for selected rule modules (rescue routing and the impact estimator); implementation status alone is not evidence of verification.
 
 | ID | Title | Priority | Status |
 |----|-------|----------|--------|
@@ -224,10 +232,10 @@ The catalog contains **26 functional requirements**: REQ-FUNC-001 through REQ-FU
 | REQ-FUNC-020 | Multimodal listing assistant | Should have | Implemented (verification pending) |
 | REQ-FUNC-026 | Rule-based automatic discounts | Should have | Implemented (verification pending) |
 | REQ-FUNC-024 | Rescue routing | Should have | Implemented (verification pending) |
+| REQ-FUNC-025 | Impact estimator | Should have | Partially implemented (verification pending) |
 | REQ-FUNC-021 | Predictive surplus engine | Should have | Planned |
 | REQ-FUNC-022 | Prep copilot and digital twin | Could have | Planned |
 | REQ-FUNC-023 | Dynamic pricing agent | Could have | Planned |
-| REQ-FUNC-025 | Impact estimator | Should have | Planned |
 
 #### REQ-FUNC-001 — User Login
 
@@ -970,12 +978,12 @@ Rescue routing helps ensure that food remaining after, or late in, the student m
 
 #### REQ-FUNC-025 — Impact Estimator
 
-**Status:** Planned
+**Status:** Partially implemented (verification pending; the calculation core, persistence, and overview display are implemented, while runtime synchronization and documented emission factors are pending)
 **Priority:** Should have
 
 **Statement:**
 
-The future system shall estimate the social and environmental impact of food-recovery activities using recorded transaction data and documented calculation methods, extending the current operational impact report (REQ-FUNC-016) with environmental indicators.
+The system shall estimate the social and environmental impact of food-recovery activities using recorded transaction data and documented calculation methods, extending the current operational impact report (REQ-FUNC-016) with environmental indicators.
 
 **Rationale:**
 
@@ -997,7 +1005,14 @@ Impact estimates can help students and campus operators understand the potential
 6. Aggregate reports use consistent calculation methods and avoid counting the same transaction more than once.
 7. If required data are missing, the system identifies the affected metric as unavailable or provides a clearly documented estimate with its assumptions.
 
-**Verification Method:** Automated calculation tests, reconciliation against transaction records, and analysis of environmental assumptions.
+**Verification Method:** Automated calculation tests (`estimator.test.ts`), reconciliation against transaction records, and analysis of environmental assumptions.
+
+**Current Implementation:**
+
+- A pure calculation module (`lib/estimator.ts`, method version `impact-v1.0`) computes, for each picked-up and non-refunded order, meals rescued (measured), diverted weight, CO₂e avoided, water saved, land saved, and student savings. Each metric carries a basis (MEASURED, ESTIMATED, or UNAVAILABLE) and a note; missing inputs are reported as unavailable rather than as zero, and each order is counted at most once (AC5–AC7).
+- Diverted weight uses the food's catalog portion weight. Environmental indicators use the emission factor of the food's category that was valid at pickup time, and each estimate records the factor and its source (AC2, AC4). Student savings use the listing's original price as the reference price and exclude fees (AC3).
+- A synchronization module (`lib/sync.ts`) stores the results as impact records, keyed by order and method version, and aggregates them by dining hall. The overview page shows the aggregates, scoped to the staff member's dining hall for staff and across all halls otherwise.
+- Pending: the synchronization currently runs only from the seed script, so pickups confirmed later are not reflected until it runs again; the emission factors in the seed are illustrative and must be replaced by documented sources before figures are reported; and the staff impact report (`/impact`) still shows a separate fixed estimate of 0.8 kg CO₂e per meal (see §4.3).
 
 ### 3.3 Quality of Service
 #### 3.3.1 Performance
@@ -1011,7 +1026,7 @@ The following are target requirements, not measured results. Until measurements 
 | REQ-NFR-04 | Settlement and reminder processing shall complete within 2 minutes of their due time while the scheduler is running. | Timestamped idle-system scenario and scheduler logs. |
 
 #### 3.3.2 Security
-The application shall enforce authenticated sessions and role-based access. Passwords shall be stored only as scrypt hashes. Before deployment, operators shall run `pnpm db:migrate-passwords`; verification shall confirm zero stored passwords without the `scrypt$` prefix. New seed accounts shall also use scrypt. Login rejects any non-scrypt stored value. The reminder endpoint requires the `x-cron-secret` header to match `CRON_SECRET`. The conversational assistant shall expose only the signed-in user's order data. The image-matching endpoint shall require the Staff Member role and validate uploaded files by type, size, and signature. Notification queries and mutations shall be scoped to the signed-in user. Login rate limiting remains an open implementation requirement and must be completed before non-local deployment.
+The application shall enforce authenticated sessions and role-based access. Passwords shall be stored only as scrypt hashes. Before deployment, operators shall run `pnpm db:migrate-passwords`; verification shall confirm zero stored passwords without the `scrypt$` prefix. New seed accounts shall also use scrypt. Login rejects any non-scrypt stored value. The reminder endpoint requires the `x-cron-secret` header to match `CRON_SECRET`. The conversational assistant shall expose only the signed-in user's order data. The image-matching endpoint shall require the Staff Member role and validate uploaded files by type, size, and signature. The voice-listing endpoint shall require the Staff Member role and accept only mono 16 kHz 16-bit WAV recordings of at most 60 seconds. Notification queries and mutations shall be scoped to the signed-in user. Login rate limiting remains an open implementation requirement and must be completed before non-local deployment.
 
 #### 3.3.3 Reliability
 The system shall maintain consistent inventory and order status by using conditional database updates. Payment holds last 10 minutes; expired unpaid orders release one unit of stock and a SOLD_OUT listing returns to ACTIVE. Payment succeeds only while the order remains PENDING_PAYMENT and within its hold. Pickup requires a matching code and only one RESERVED-to-PICKED_UP transition may succeed. Settlement runs from the one-minute local scheduler as well as on application requests. Paid orders that reach the end of their pickup window currently receive a full simulated refund and enter EXPIRED; listing withdrawal refunds paid orders and marks them CANCELLED. A separate NO_SHOW state and distinct no-show refund policy are deferred pending an approved product decision. The chat assistant is read-only and must fail gracefully without blocking marketplace features when Ollama is unavailable.
@@ -1037,13 +1052,13 @@ stateDiagram-v2
 |---|---|---|
 | REQ-NFR-05 | Core marketplace workflows shall remain usable when Ollama is unavailable. | Disable Ollama and complete listing, reservation, payment, and pickup workflows. |
 | REQ-NFR-06 | The interface shall support current Chrome, Edge, Firefox, and Safari, keyboard navigation, and programmatic labels for form fields. | Browser spot checks and keyboard-only review. |
-| REQ-NFR-07 | The local reference environment shall provide at least 16 GB RAM; CPU-only inference is supported with no guaranteed AI latency. Ollama is a separate persistent service hosting `qwen2:7b` and `qwen2.5vl:3b`. | Record host configuration and verify degraded behavior when models are unavailable. |
+| REQ-NFR-07 | The local reference environment shall provide at least 16 GB RAM; CPU-only inference is supported with no guaranteed AI latency. Ollama is a separate persistent service hosting `qwen2:7b`, `qwen2.5vl:3b`, and `frozenlab/qwen3-asr:0.6b`. | Record host configuration and verify degraded behavior when models are unavailable. |
 | REQ-NFR-08 | The service shall target 99% availability during dining-hall operating hours, excluding planned maintenance. | Measure uptime across a one-week operating-period window; evidence pending. |
 
 ### 3.4 Compliance
 The system shall handle student and staff account data in accordance with the Personal Information Protection Law of the PRC (PIPL). Stored personal data are name (display), email (login/contact), role (authorization), dining hall (staff scope), orders (reservation and settlement), notifications (service messages), and sessions (authentication). Chat messages and uploaded meal images are processed locally and are not persisted by the application; temporary image files are deleted after processing. Account deletion and retention periods are not currently implemented and are release requirements to resolve before production use; proposed targets are sessions 7 days, notifications 90 days, and orders 1 year. Dining-hall operators own food-safety and allergen rules. Listing pages must direct users with severe allergies to verify information with staff; catalog data are operator-provided and are not a safety guarantee.
 
-Use-case participants are Guest, Student, Staff Member, and the local scheduler. Guests browse the public overview; Students browse/filter, reserve, pay, view pickup codes, and receive reminders; Staff Members publish/withdraw listings, confirm pickups, and view reports; the scheduler settles due orders and sends reminders. Detailed sequence and class diagrams belong in a design document.
+Use-case participants are Guest, Student, Staff Member, and the local scheduler. Guests browse the public overview; Students browse/filter, reserve, pay, view pickup codes, and receive reminders; Staff Members publish/withdraw listings, confirm pickups, and view reports; the scheduler settles due orders and sends reminders. Detailed sequence diagrams, state machines, and the data model are provided in the Software Architecture Document (`docs/SAD.md`).
 
 ```mermaid
 flowchart LR
@@ -1062,16 +1077,18 @@ flowchart LR
 ```
 
 ### 3.5 Design and Implementation
-The system shall continue to use a layered architecture with clear separation between user interface, service logic, and persistence. The current data model includes User, DiningHall, Food, Listing, Order, Notification, and AuthSession, plus RescueDestination, RescueDispatch, and ListingEvent for rescue routing; future AI features can extend this model with prediction outputs, pricing policies, and impact metrics.
+The system shall continue to use a layered architecture with clear separation between user interface, service logic, and persistence; the Software Architecture Document (`docs/SAD.md`) describes the layers, modules, runtime behavior, and deployment. The current data model includes User, DiningHall, Food, Listing, Order, Notification, and AuthSession, plus RescueDestination, RescueDispatch, and ListingEvent for rescue routing, and EmissionFactor and ImpactRecord for impact estimation. The schema also contains tables reserved for planned features (forecasting inputs and outputs, model versions, pricing policies and price history, listing drafts, media assets, and simulation scenarios); they are not used at runtime yet.
 
 Key implementation units of the current prototype:
 
 - Conversational assistant: authenticated API route (`app/api/chat/route.ts`), local Ollama client with a tool-calling loop (`lib/ollama.ts`), bounded data-access tools (`lib/chat-tools.ts`), floating chat widget (`app/components/ChatWidget.tsx`).
 - Rescue routing: pure routing rules and listing helpers (`lib/rescue-routing.ts`, unit-tested in `lib/rescue-routing.test.ts`), database helpers for destination capacity and dispatch links (`lib/rescue-dispatch.ts`), server actions to plan, approve, complete, and cancel routes (`app/actions.ts`), and the rescue-routing panel on `/merchant`.
 - Image-based food selection: authenticated staff member endpoint (`app/api/food-image-match/route.ts`), client upload component (`app/components/FoodImageMatcher.tsx`), Python matcher (`app/scripts/classify_meal.py`) using `OLLAMA_VISION_MODEL` independently of the chat model.
+- Voice listing input: authenticated staff member endpoint (`app/api/voice-listing-assistant/route.ts`) that transcribes a WAV recording with `OLLAMA_ASR_MODEL` and extracts listing fields with `OLLAMA_MODEL`, and a client recorder (`app/components/VoiceListingAssistant.tsx`) that converts audio to 16 kHz mono WAV and fills only the extracted form fields.
 - Notifications: event triggers in server actions and the order-lifecycle module, a timed reminder endpoint (`app/api/notifications/route.ts`), a scheduler sidecar (`cron.js`) started together with the development server, and the notifications panel (`app/components/Notifications.tsx`).
 - Rule-based automatic discounts: the one-minute protected scheduler calls a deterministic pricing module (`lib/dynamic-pricing.ts`), which evaluates opted-in listings no more often than every 10 minutes and stores the last review reason.
 - Payment and settlement: reservation and payment server actions (`app/actions.ts`) and the settlement module (`lib/order-lifecycle.ts`).
+- Impact estimation: pure calculation module (`lib/estimator.ts`, unit-tested in `estimator.test.ts`) and a synchronization and reporting module (`lib/sync.ts`) that stores impact records and aggregates them for the overview page.
 
 ### 3.6 AI/ML
 Two AI components are operational in the current prototype, both running on locally hosted Ollama models:
@@ -1086,7 +1103,7 @@ Two AI components are operational in the current prototype, both running on loca
    - Voice input is transcribed locally and extracts clearly spoken catalog food, quantity, original price, discount, and pickup times; only non-null fields are filled and staff review and submit the listing.
    - Suggestions for descriptions and other unlisted fields remain future extensions.
 
-The current rule-based markdown policy (REQ-FUNC-026) and the current rescue router (REQ-FUNC-024) are deterministic business logic, not AI models. REQ-FUNC-023 remains a future advanced Dynamic Pricing Agent. The current AI components demonstrate the privacy-preserving, locally hosted approach that future predictive modules will follow. The future product direction adds the following AI modules:
+The current rule-based markdown policy (REQ-FUNC-026) and the current rescue router (REQ-FUNC-024) are deterministic business logic, not AI models, and the current impact estimator (REQ-FUNC-025) is likewise a deterministic calculation. REQ-FUNC-023 remains a future advanced Dynamic Pricing Agent. The current AI components demonstrate the privacy-preserving, locally hosted approach that future predictive modules will follow. The future product direction adds the following AI modules:
 
 AI acceptance targets for the current locally hosted features (not yet measured): the chat evaluation set shall contain 40 questions across live listings, own orders, pickup codes, allergens, time, small talk, prompt injection, cross-user data requests, and prohibited order changes; run each three times. Allergen filtering and privacy cases require 100% correct outcomes, and other answers require at least 90% correctness. The image matcher shall be measured on labeled images in `docs/sample_food_images/` plus 20 additional labeled images, with ≥80% top-1 accuracy and 100% invalid-file rejection. Re-evaluation is required when `OLLAMA_MODEL` or `OLLAMA_VISION_MODEL` changes. The additional 20-image set and recorded evaluation results are not yet present.
 
@@ -1110,7 +1127,7 @@ AI acceptance targets for the current locally hosted features (not yet measured)
      - learned ranking among destinations that already passed every rule, informed by completed deliveries;
      - routing and volunteer logistics, including additional campus kitchens.
 
-5. Impact Estimator (REQ-FUNC-025)
+5. Impact Estimator (REQ-FUNC-025; deterministic calculation core implemented)
    - Measures meals rescued, kilograms diverted, CO₂e avoided, water saved, and student savings.
    - Provides a real-time account of impact for each transaction or operational cycle.
 
@@ -1135,7 +1152,7 @@ Verification is performed at two levels: the current prototype and the future AI
 | REQ-FUNC-002 | Sign up with valid, malformed, and duplicate inputs | Account created and redirected; clear errors for invalid or duplicate inputs | — | — | Verification pending |
 | REQ-FUNC-003 | Request `/merchant` and `/impact` as a student and while signed out | Redirects in both cases; staff member actions rejected for students | — | — | Verification pending |
 | REQ-FUNC-004 | Log in, inspect the session record, then log out | Hashed token with expiry in AuthSession; record deleted and cookie cleared on logout | — | — | Verification pending |
-| REQ-FUNC-005 | Open `/` signed out and try to reserve | Listings preview visible; reservation attempt leads to login | — | — | Verification pending |
+| REQ-FUNC-005 | Open `/` signed out and try to reserve | Listings preview visible; reservation attempt leads to login | — | — | Verification pending; known nonconformance with AC3 (SAD D-2) |
 | REQ-FUNC-006 | Publish valid and invalid listings | Valid listing appears for students; invalid inputs rejected | — | — | Verification pending |
 | REQ-FUNC-007 | Withdraw an active listing and attempt to reserve it | Listing WITHDRAWN and hidden; paid orders cancelled and refunded | — | — | Verification pending |
 | REQ-FUNC-008 | Compare listing cards with database records | Only available listings shown, with complete and accurate details | — | — | Verification pending |
@@ -1143,15 +1160,16 @@ Verification is performed at two levels: the current prototype and the future AI
 | REQ-FUNC-010 | Reserve a listing, including the last unit and a sold-out listing | Inventory decrements atomically; SOLD_OUT at zero; no overbooking | — | — | Verification pending |
 | REQ-FUNC-011 | Pay for an order and confirm payment twice | Single PENDING_PAYMENT → RESERVED transition; `paidAt` recorded | — | — | Verification pending |
 | REQ-FUNC-012 | Expire and withdraw listings; settle twice | Full refunds recorded once; unpaid orders expire without refund | — | — | Verification pending |
-| REQ-FUNC-013 | Pay for two orders and inspect the codes | Unique `XXXX-XXXX-XX` codes visible only to the order owner | — | — | Verification pending |
+| REQ-FUNC-013 | Pay for two orders and inspect the codes | Unique `XXXX-XXXX-XX` codes visible only to the order owner | — | — | Verification pending; known nonconformance with AC4 (SAD D-4) |
 | REQ-FUNC-014 | Confirm pickup as the owning hall and as another hall | PICKED_UP for the owning hall only; no double confirmation | — | — | Verification pending |
 | REQ-FUNC-015 | Compare dashboard metrics with database records | Totals reconcile; only PICKED_UP orders counted | — | — | Verification pending |
 | REQ-FUNC-016 | Open `/impact` as a staff member and as a student | Seven-day rescued-meal view for own hall; students redirected | — | — | Verification pending |
-| REQ-FUNC-017 | Trigger order events and open the notifications panel | Event notifications appear once per event; unread badge and mark-as-read work | — | — | Verification pending |
-| REQ-FUNC-018 | Run the reminder sweep twice against controlled pickup windows | Each timed reminder sent exactly once, with food name and pickup code | — | — | Verification pending |
+| REQ-FUNC-017 | Trigger order events and open the notifications panel | Event notifications appear once per event; unread badge and mark-as-read work | — | — | Verification pending; known nonconformance with AC5 (SAD D-3) |
+| REQ-FUNC-018 | Run the reminder sweep twice against controlled pickup windows | Each timed reminder sent exactly once, with food name and pickup code | — | — | Verification pending; AC3 at risk when scheduler runs overlap (SAD D-9) |
 | REQ-FUNC-019 | Ask listing, order, allergen, and time questions with and without a session | Live-data answers for signed-in users; HTTP 401 otherwise | — | — | Verification pending |
 | REQ-FUNC-020 | Upload a labeled meal photo and an invalid file | Correct catalog selection; invalid files rejected; manual fallback works | — | — | Verification pending |
-| REQ-FUNC-024 | Run routing rule scenarios; plan, approve, deliver, reject, and cancel routes on `/merchant` | Safety, allergen, capacity, deadline, and priority rules hold; approval enforced; no duplicate dispatch; disposition recorded | `lib/rescue-routing.test.ts` | 2026-11-21 | Unit rules: 15/15 pass; end-to-end verification pending |
+| REQ-FUNC-024 | Run routing rule scenarios; plan, approve, deliver, reject, and cancel routes on `/merchant` | Safety, allergen, capacity, deadline, and priority rules hold; approval enforced; no duplicate dispatch; disposition recorded | `lib/rescue-routing.test.ts` | 2026-11-21 | Unit rules: 15/15 pass; end-to-end verification pending and requires a migration for the rescue tables (SAD D-1) |
+| REQ-FUNC-025 | Run the calculation tests; compare impact records with picked-up orders; check missing-data cases | Correct metric bases; no double counting; unavailable metrics never shown as zero | `estimator.test.ts` | 2026-11-21 | Unit calculations: 9/9 pass; runtime synchronization and end-to-end verification pending |
 | REQ-FUNC-026 | Run rule scenarios for weak/strong demand, inventory, urgency, cadence, cap, and price snapshots | Only opted-in listings receive monotone 5-point markdowns; cap 80%; existing orders unchanged | — | — | Verification pending |
 
 ### 4.2 Non-Functional Verification
@@ -1159,8 +1177,8 @@ Verification is performed at two levels: the current prototype and the future AI
 | ID | Verification activity | Expected evidence | Test ID | Run date | Result |
 |----|-----------------------|-------------------|---------|----------|--------|
 | REQ-NFR-01 | Measure core workflows under the reference workload | p95 ≤ 1.0 s at 20 concurrent users | — | — | Verification pending |
-| REQ-NFR-02 | Measure chat response and timeout behavior | p95 ≤ 15 s; timeout by 60 s | — | — | Verification pending |
-| REQ-NFR-03 | Measure image matching and fallback | p95 ≤ 20 s; timeout by 60 s | — | — | Verification pending |
+| REQ-NFR-02 | Measure chat response and timeout behavior | p95 ≤ 15 s; timeout by 60 s | — | — | Verification pending; known nonconformance: no timeout is configured (SAD D-7) |
+| REQ-NFR-03 | Measure image matching and fallback | p95 ≤ 20 s; timeout by 60 s | — | — | Verification pending; known nonconformance: the timeout is 180 s (SAD D-8) |
 | REQ-NFR-04 | Observe settlement/reminder timing while idle | Due work completed within 2 minutes | — | — | Verification pending |
 | REQ-NFR-05–08 | Test degraded operation, browser/accessibility support, reference setup, and availability | Recorded manual review and uptime results | — | — | Verification pending |
 
@@ -1180,6 +1198,10 @@ The following limitations are known and accepted for this phase; they are docume
 - Chat assistant answer quality depends on the locally hosted model; small models may occasionally summarize imperfectly even though the underlying data is correct.
 - The meal image matcher only selects from existing catalog foods; it does not create new catalog entries or fill other listing fields.
 - Rescue routing: the prototype has no separate operator role, so the Staff Member who plans a route can also approve it; the approver is recorded. Rescue destinations and their daily capacities are maintained through seed data. RescueDispatch has no listing column; the dispatch–listing link and the units taken off sale are stored in the RESCUE_ROUTE_CREATED ListingEvent. The allergen rule is deliberately conservative, and safe holding time is a single 120-minute value for all food categories.
+- Impact estimation is partial: impact records are produced only when the synchronization runs (currently from the seed script), so pickups confirmed afterwards do not update the environmental figures; the emission factors in the seed are illustrative; and the staff impact report uses a separate fixed estimate of 0.8 kg CO₂e per meal instead of the impact estimator.
+- Automatic pricing keeps only the most recent review reason on the listing; no history of price changes is stored yet.
+- The database schema contains tables reserved for planned features (forecasting, pricing policies and price history, listing drafts, media assets, and simulation scenarios). They are populated only by the seed script and are not used at runtime.
+- An architecture conformance review (SAD §2.2.2, 2026-11-21) recorded deviations between the prototype and this specification. The most significant is that the committed database migrations do not yet create 13 of the schema's tables, including the rescue-routing tables, so a database built only from the migrations cannot run the seed script or rescue routing until a migration is added. Other deviations affect REQ-FUNC-005, REQ-FUNC-013, REQ-FUNC-017, REQ-FUNC-018, REQ-NFR-02, and REQ-NFR-03 (see §4.1 and §4.2). The SAD lists each deviation with a suggested remedy; these are defects to fix, not accepted limitations.
 
 ## 5. Appendices
 ### Appendix A: Current Core Routes
@@ -1196,13 +1218,14 @@ The following limitations are known and accepted for this phase; they are docume
 | `/pay/[ref]` | Simulated payment page for a reservation |
 | `/api/chat` | Authenticated conversational-assistant endpoint |
 | `/api/food-image-match` | Staff-only image-to-food catalog suggestion endpoint |
+| `/api/voice-listing-assistant` | Staff-only voice transcription and listing-field extraction endpoint |
 | `/api/notifications` | Secret-protected reminder and settlement endpoint invoked by the local scheduler |
 
 ### Appendix B: Current Data Model Summary
 
 - User: identity, role, dining hall assignment, authentication, and session relationships.
 - DiningHall: dining location and associated staff members/listings.
-- Food: catalog entry with name, description, and allergens; allergen preferences are page filters only and are not stored on user accounts.
+- Food: catalog entry with name, description, allergens, category, and portion weight (the last two feed the impact estimator); allergen preferences are page filters only and are not stored on user accounts.
 - Listing: meal offer with price, quantity, discount, and pickup schedule, linked to a Food record; optional rule-based pricing stores opt-in, last review time, and the last decision reason.
 - Order: reservation with simulated payment state, refund fields, pickup confirmation state, and per-order reminder flags (`reminderOpenSent`, `reminderCloseSent`).
 - Notification: in-app message addressed to one user, with read/unread state and timestamp.
@@ -1210,6 +1233,9 @@ The following limitations are known and accepted for this phase; they are docume
 - RescueDestination: configured recovery or disposal destination (pantry, shelter, staff kitchen, compost, other) with optional daily capacity in kg and an active flag.
 - RescueDispatch: a routed batch of food from a dining hall to a destination, with weight, category, notes, and status (PLANNED, DISPATCHED, COMPLETED, CANCELLED).
 - ListingEvent: audit log of listing events, including the RESCUE_ROUTE_* recommendation and disposition records.
+- EmissionFactor: per-category conversion factors (CO₂e, water, and land per kilogram of food) with a source and a validity start date.
+- ImpactRecord: impact metrics of one picked-up order under one calculation method, each with its basis (measured, estimated, or unavailable) and the assumptions used.
+- Reserved for planned features (not used at runtime): ListingDraft, MediaAsset, PricingPolicy, PriceChange, ModelVersion, DailyProduction, WeatherObservation, CampaignEvent, SurplusForecast, and SimulationScenario.
 
 ### Appendix C: Future AI Roadmap Summary
 
@@ -1222,11 +1248,12 @@ The following limitations are known and accepted for this phase; they are docume
 ```bash
 pnpm install
 docker compose up -d
-pnpm prisma migrate deploy
-pnpm prisma generate
-pnpm prisma db seed
-ollama pull qwen2:7b      # local model for the chat assistant
-   ollama pull qwen2.5vl:3b  # local vision model for meal photo matching
-   ollama pull frozenlab/qwen3-asr:0.6b # local voice transcription for listing input
-pnpm dev                  # starts Next.js and the notification reminder scheduler
+pnpm db:migrate                       # apply the committed migrations (uses prisma7.config.ts)
+pnpm db:generate                      # generate Prisma Client
+pnpm db:seed                          # destructive: recreates the demo data
+ollama pull qwen2:7b                  # local model for the chat assistant and voice field extraction
+ollama pull qwen2.5vl:3b              # local vision model for meal photo matching
+ollama pull frozenlab/qwen3-asr:0.6b  # local voice transcription for listing input
+python3 -m pip install pillow         # image library used by the meal photo matcher
+pnpm dev                              # starts Next.js and the scheduler (settlement, discounts, reminders)
 ```
