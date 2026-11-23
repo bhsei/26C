@@ -4,6 +4,8 @@
 
 SecondHelping is a campus surplus-food marketplace. Dining hall staff post closing bags at a discount; students browse meals, filter by dining hall and allergens, reserve food, and show a pickup code to staff.
 
+Developed by: [Bianca Zavadisk](https://github.com/bianca-zavadisk), [Gabriel Ferreira Silva](https://github.com/GabrielFerSilva), [Geming Wu](https://github.com/Darkness-H), Marwen Jadlaoui and [Zamo Rzgar Ahmed](https://github.com/ZamoRzgar). Made for the 2026/Fall-Winter Software Engineering Lecture taught at Beihang University (BUAA).
+
 ## Current features
 
 - Student sign-up and login, with hashed passwords and database-backed sessions.

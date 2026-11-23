@@ -13,7 +13,7 @@ Beihang University · Software Engineering · Team: The Debuggers
 
 *All future revisions to this document shall be approved by the content owner prior to release.*
 
-This document follows the SEI "Views and Beyond" Architecture Documentation Template of 05 February 2006 [SEI 2006]. It describes the architecture of the SecondHelping prototype as built at commit `9bf5f5b` ("Rescue Router Implemented") on branch `main`, and traces it to the Software Requirements Specification v1.5 [SRS].
+This document follows the SEI "Views and Beyond" Architecture Documentation Template of 05 February 2006 [SEI 2006]. It describes the architecture of the SecondHelping prototype on branch `main`, and traces it to the Software Requirements Specification v1.5 [SRS].
 
 ## Table of Contents
 * [Revision History](#revision-history)
@@ -179,10 +179,11 @@ This document follows the SEI "Views and Beyond" Architecture Documentation Temp
 |------|------|--------------------|---------|
 | Initial baseline | 2026/11/21 | First release: documentation roadmap, architecture background, five views (module decomposition, layered, data model, runtime component-and-connector, deployment), relations among views, and an architecture conformance review of the prototype at commit `9bf5f5b` | 1.0 |
 | SRS alignment | 2026/11/21 | Traced to SRS v1.5. Updated the coverage of REQ-FUNC-025 and the status of deviations D-10 and D-15, whose SRS parts were corrected by SRS v1.5; removed the corresponding known inconsistency. The architecture is unchanged | 1.1 |
+| Minor Text Changes | 2026/11/23 | WRITE HERE | 1.2 |
 
 ## 1. Documentation Roadmap
 
-New readers should start with this Documentation Roadmap. It also serves returning readers: it explains how the SAD is organized, so a reader looking for something specific can find it without reading the whole document.
+New readers should start with this Documentation Roadmap.
 
 - Section 1.1 ("Document Management and Configuration Control Information") gives the revision history. Use it to check that you are reading the correct version of the SAD.
 - Section 1.2 ("Purpose and Scope of the SAD") explains what the SAD covers and what it leaves out. Use it to decide whether the information you need is likely to be here.
@@ -191,8 +192,6 @@ New readers should start with this Documentation Roadmap. It also serves returni
 - Section 1.5 ("Viewpoint Definitions") defines the five viewpoints used in this SAD, as IEEE Standard 1471-2000 defines the term. Each viewpoint has a matching view in Section 3, so this section shows how the architectural information is divided up.
 - Section 1.6 ("How a View Is Documented") gives the standard outline used for every view. Use it to find the part of a view that holds what you need.
 - Section 1.7 ("Relationship to Other SADs") and Section 1.8 ("Process for Updating this SAD") relate this document to other project documents and explain how to report a problem in it.
-
-The table below suggests a reading path for each kind of reader.
 
 *Table 1: Suggested reading paths.*
 
