@@ -179,7 +179,7 @@ This document follows the SEI "Views and Beyond" Architecture Documentation Temp
 |------|------|--------------------|---------|
 | Initial baseline | 2026/11/21 | First release: documentation roadmap, architecture background, five views (module decomposition, layered, data model, runtime component-and-connector, deployment), relations among views, and an architecture conformance review of the prototype at commit `9bf5f5b` | 1.0 |
 | SRS alignment | 2026/11/21 | Traced to SRS v1.5. Updated the coverage of REQ-FUNC-025 and the status of deviations D-10 and D-15, whose SRS parts were corrected by SRS v1.5; removed the corresponding known inconsistency. The architecture is unchanged | 1.1 |
-| Minor Text Changes | 2026/11/23 | WRITE HERE | 1.2 |
+| Minor Text Changes | 2026/11/23 | We did some text changes at the first section | 1.2 |
 
 ## 1. Documentation Roadmap
 
